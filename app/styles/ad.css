@@ -45,3 +45,6 @@ input[type='url'] {
   .versions { grid-template-columns: 1fr; }
   .row > div { width: 100%; }
 }
+
+/* Straight boxes for every field, card, button, and panel. */
+*, *::before, *::after { border-radius: 0 !important; }

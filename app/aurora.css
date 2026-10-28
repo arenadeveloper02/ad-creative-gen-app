@@ -18,8 +18,8 @@
   --aurora-grad-ring: conic-gradient(from 200deg, #5c75f6, #60a5fa, #2dd4bf, #fb7185, #5c75f6);
   --aurora-glow: 92, 117, 246;
   --aurora-glow2: 45, 212, 191;
-  --aurora-r: 20px;
-  --aurora-r-lg: 28px;
+  --aurora-r: 0px;
+  --aurora-r-lg: 0px;
   --aurora-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --aurora-bg: #f6f6fc;
   --aurora-bg2: #eeeefa;

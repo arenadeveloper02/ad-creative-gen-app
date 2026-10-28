@@ -105,7 +105,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
               {[0, 1].map((item) => (
                 <div key={item} className="vcard">
                   <div className="vhead"><strong>Version {letter(item)}</strong></div>
-                  <div className="sk" style={{ height: 180, borderRadius: 12, background: 'var(--aurora-inset)' }} />
+                  <div className="sk" style={{ height: 180, background: 'var(--aurora-inset)' }} />
                 </div>
               ))}
             </div>
