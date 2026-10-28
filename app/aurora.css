@@ -267,12 +267,12 @@ html:not(.dark) .aurora-g, html:not(.dark) .card, html:not(.dark) .log, html:not
 
 /* ---- Stepper (aurora toolbar + chips) --------------------------------- */
 .stepper {
-  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  padding: 8px 10px; border-radius: 999px; margin: 0 auto 26px; width: fit-content; max-width: 100%;
+  display: flex; align-items: center; gap: 48px; flex-wrap: wrap;
+  padding: 10px 16px; border-radius: 999px; margin: 0 auto 26px; width: fit-content; max-width: 100%;
 }
 .step {
-  position: relative; overflow: hidden; display: flex; align-items: center; gap: 9px;
-  padding: 10px 28px; border-radius: 999px; border: 1px solid transparent; background: transparent;
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-width: 168px; padding: 12px 36px; border-radius: 999px; border: 1px solid transparent; background: transparent;
   cursor: pointer; color: var(--aurora-text2); font-weight: 500; font-size: 13px;
   transition: color 0.2s, background 0.2s, box-shadow 0.2s;
 }
