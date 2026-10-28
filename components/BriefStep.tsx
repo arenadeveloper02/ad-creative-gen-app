@@ -58,7 +58,6 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
   const selected = profiles.find((item) => item.id === profileId) ?? null;
   const isNew = profileId === '__new__';
-  const showFields = profileId !== '' || brandName !== '' || product !== '';
 
   const grouped = useMemo(() => {
     const map: Record<string, AssetDTO[]> = {};
@@ -224,7 +223,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         </select>
 
         <h4 style={{ marginTop: 22 }}>Brand profile, guidelines and assets</h4>
-        <p className="hint">Choose a saved profile and its details load here. Profiles are stored for your Arena account only.</p>
+        <p className="hint">A saved profile is optional. Type the brand details below, or pick a profile to fill them in.</p>
 
         <div className="brand-panel">
           <label htmlFor="profileSelect">Brand profile</label>
@@ -241,7 +240,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
               applyProfile(value);
             }}
           >
-            <option value="">— Select a brand profile —</option>
+            <option value="">No saved profile</option>
             {profiles.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -261,8 +260,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             </div>
           )}
 
-          {showFields && (
-            <div className="row">
+          <div className="row">
               <div>
                 <label htmlFor="brand">Brand / company name</label>
                 <input id="brand" type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g. Position2" />
@@ -271,8 +269,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                 <label htmlFor="product">Product or service</label>
                 <input id="product" type="text" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Arena AI workflow platform" />
               </div>
-            </div>
-          )}
+          </div>
 
           {isNew && (
             <div style={{ marginTop: 12 }}>
@@ -286,9 +283,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             </div>
           )}
 
-          {showFields && (
-            <>
-              <div className="asset-grid">
+          <div className="asset-grid">
                 {FIELDS.map((field) => (
                   <div key={field.key} className="asset-card">
                     <h4>{field.title}</h4>
@@ -329,10 +324,8 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                   </div>
                 </div>
               </div>
-              <label htmlFor="guidelineUrl">Guidelines link (optional)</label>
-              <input id="guidelineUrl" type="url" value={guidelineUrl} onChange={(e) => setGuidelineUrl(e.target.value)} placeholder="https://brand.example.com" />
-            </>
-          )}
+          <label htmlFor="guidelineUrl">Guidelines link (optional)</label>
+          <input id="guidelineUrl" type="url" value={guidelineUrl} onChange={(e) => setGuidelineUrl(e.target.value)} placeholder="https://brand.example.com" />
           {status && <p className={`status-line ${statusKind}`}>{status}</p>}
         </div>
 
