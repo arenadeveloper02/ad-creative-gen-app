@@ -1,21 +1,5 @@
+@import './aurora.css';
+@import './styles/ad.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  color-scheme: light;
-}
-
-.dark {
-  color-scheme: dark;
-}
-
-body {
-  @apply antialiased;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}

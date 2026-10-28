@@ -15,3 +15,113 @@ model ExportLog {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model AdProject {
+  id           String   @id @default(cuid())
+  ownerEmail   String
+  name         String   @default("Untitled ad")
+  description  String   @default("")
+  goal         String   @default("Awareness")
+  brandName    String   @default("")
+  product      String   @default("")
+  guidelineUrl String?
+  profileId    String?
+  c1           String   @default("#1B365D")
+  c2           String   @default("#2E6DA4")
+  c3           String   @default("#FFFFFF")
+  platform     String   @default("Meta (Facebook/Instagram)")
+  format       String   @default("Feed 1:1")
+  audience     String   @default("")
+  tone         String   @default("Professional")
+  visualStyle  String   @default("Clean / minimal")
+  cta          String   @default("Get started")
+  copySource   String   @default("ai")
+  headline     String   @default("")
+  subline      String   @default("")
+  avoid        String   @default("")
+  step         Int      @default(1)
+  status       String   @default("draft")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  versions     AdVersion[]
+  assets       AdAsset[]
+  usageEvents  UsageEvent[]
+
+  @@index([ownerEmail])
+}
+
+model BrandProfile {
+  id           String    @id @default(cuid())
+  ownerEmail   String
+  name         String
+  brandName    String    @default("")
+  product      String    @default("")
+  guidelineUrl String?
+  c1           String    @default("#1B365D")
+  c2           String    @default("#2E6DA4")
+  c3           String    @default("#FFFFFF")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  assets       AdAsset[]
+
+  @@index([ownerEmail])
+}
+
+model AdAsset {
+  id         String        @id @default(cuid())
+  ownerEmail String
+  projectId  String?
+  project    AdProject?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  profileId  String?
+  profile    BrandProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  kind       String
+  name       String
+  mimeType   String
+  size       Int
+  data       Bytes
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([ownerEmail])
+  @@index([projectId])
+  @@index([profileId])
+}
+
+model AdVersion {
+  id        String    @id @default(cuid())
+  projectId String
+  project   AdProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  position  Int
+  headline  String
+  sub       String    @default("")
+  primary   String    @default("")
+  cta       String
+  layout    String
+  bg        String
+  c1        String
+  c2        String
+  c3        String
+  size      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([projectId, position])
+}
+
+model UsageEvent {
+  id           String     @id @default(cuid())
+  projectId    String?
+  project      AdProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  ownerEmail   String
+  kind         String
+  provider     String
+  model        String
+  estimatedUsd Float
+  meta         Json?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([ownerEmail])
+  @@index([projectId])
+  @@index([createdAt])
+}
