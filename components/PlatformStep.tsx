@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { canonicalImageModel, IMAGE_MODELS, type ImageModel } from '@/lib/fal-models';
 import { PLATFORMS, TONES, VISUAL_STYLES } from '@/lib/platforms';
 import type { ProjectDTO } from '@/lib/types';
 
@@ -15,6 +16,7 @@ export interface PlatformPayload {
   headline: string;
   subline: string;
   avoid: string;
+  imageModel: ImageModel;
 }
 
 interface PlatformStepProps {
@@ -37,6 +39,8 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const [headline, setHeadline] = useState(project.headline);
   const [subline, setSubline] = useState(project.subline);
   const [avoid, setAvoid] = useState(project.avoid);
+  const [imageModel, setImageModel] = useState<ImageModel>(canonicalImageModel(project.imageModel));
+  const modelHint = IMAGE_MODELS.find((m) => m.value === imageModel)?.hint ?? '';
 
   function pickPlatform(next: string) {
     setPlatform(next);
@@ -97,6 +101,16 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
           </div>
         </div>
 
+        <label>Image model (fal.ai)</label>
+        <div className="chips">
+          {IMAGE_MODELS.map((item) => (
+            <button key={item.value} type="button" className={`chip${imageModel === item.value ? ' on' : ''}`} onClick={() => setImageModel(item.value)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <p className="hint">{modelHint}. Each version renders one image from your brief, brand colours, logo and reference creatives.</p>
+
         <label>Ad copy source</label>
         <div className="chips">
           <button type="button" className={`chip${copySource === 'ai' ? ' on' : ''}`} onClick={() => setCopySource('ai')}>
@@ -132,7 +146,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
             type="button"
             className="btn"
             disabled={saving}
-            onClick={() => onGenerate({ platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid })}
+            onClick={() => onGenerate({ platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, imageModel })}
           >
             {saving ? 'Generating…' : 'Generate ad'}
           </button>

@@ -8,6 +8,7 @@ import type { ProjectDTO, VersionDTO } from '@/lib/types';
 interface GenerateStepProps {
   project: ProjectDTO;
   generating: boolean;
+  busy: boolean;
   think: { title: string; detail: string; state: 'wait' | 'run' | 'done' }[];
   bar: number;
   error: string | null;
@@ -16,15 +17,22 @@ interface GenerateStepProps {
   onAdd: () => void;
   onRemove: (id: string) => void;
   onRewrite: (id: string) => void;
+  onImage: (id: string) => void;
 }
 
 function letter(index: number): string {
   return String.fromCharCode(65 + index);
 }
 
-export default function GenerateStep({ project, generating, think, bar, error, onBack, onPatch, onAdd, onRemove, onRewrite }: GenerateStepProps) {
+function isHttpsUrl(value: string | null): value is string {
+  return typeof value === 'string' && /^https:\/\//i.test(value);
+}
+
+export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onAdd, onRemove, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  const imageCache = useRef<Record<string, HTMLImageElement>>({});
+  const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
 
   useEffect(() => {
@@ -33,12 +41,27 @@ export default function GenerateStep({ project, generating, think, bar, error, o
     }
   }, [project.versions, activeId]);
 
+  // Fal images are fetched once per URL with CORS so the canvas can export them.
+  useEffect(() => {
+    for (const version of project.versions) {
+      const url = version.imageUrl;
+      if (!isHttpsUrl(url) || imageCache.current[url]) continue;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => setLoadedUrls((current) => ({ ...current, [url]: true }));
+      img.onerror = () => setLoadedUrls((current) => ({ ...current, [url]: false }));
+      img.src = url;
+      imageCache.current[url] = img;
+    }
+  }, [project.versions]);
+
   useEffect(() => {
     for (const version of project.versions) {
       const canvas = canvasRefs.current[version.id];
-      if (canvas) drawAd(canvas, version, project.brandName);
+      const image = isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null;
+      if (canvas) drawAd(canvas, version, project.brandName, image);
     }
-  }, [project.versions, project.brandName]);
+  }, [project.versions, project.brandName, loadedUrls]);
 
   function patch(partial: Partial<VersionDTO>) {
     if (!active) return;
@@ -51,8 +74,22 @@ export default function GenerateStep({ project, generating, think, bar, error, o
     const link = document.createElement('a');
     const safePlatform = project.platform.replace(/[^\w]+/g, '-').toLowerCase();
     link.download = `ad-${safePlatform}-v${letter(version.position)}-${version.size}.png`;
-    link.href = canvas.toDataURL('image/png');
+    try {
+      link.href = canvas.toDataURL('image/png');
+    } catch {
+      // Canvas is tainted when the image host blocks CORS: hand over the raw image instead.
+      if (!isHttpsUrl(version.imageUrl)) return;
+      link.href = version.imageUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+    }
     link.click();
+  }
+
+  function imageState(version: VersionDTO): string {
+    if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] === false ? 'Image could not be displayed' : loadedUrls[version.imageUrl] ? 'fal.ai image' : 'Loading image…';
+    if (version.imageError) return `Image failed: ${version.imageError}`;
+    return 'No image yet';
   }
 
   return (
@@ -74,7 +111,7 @@ export default function GenerateStep({ project, generating, think, bar, error, o
             </div>
             <div>
               <h4>Creating your ads…</h4>
-              <p className="hint">This stays on your account. The copy is written on the server.</p>
+              <p className="hint">Copy is written on the server; each image is rendered on fal.ai from your brief. This can take up to a minute.</p>
               {think.map((step) => (
                 <div key={step.title} className={`think-step ${step.state}`}>
                   <span>{step.state === 'done' ? '✓' : step.state === 'run' ? '•' : '○'}</span>
@@ -101,18 +138,22 @@ export default function GenerateStep({ project, generating, think, bar, error, o
                     </div>
                     <canvas ref={(node) => { canvasRefs.current[version.id] = node; }} />
                     <div className="vcopy">{version.primary}</div>
+                    <div className="hint" style={{ marginTop: 6 }}>{imageState(version)}</div>
                     <div className="vactions">
                       <button type="button" onClick={(e) => { e.stopPropagation(); setActiveId(version.id); }}>Edit</button>
                       <button type="button" onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
+                      <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onImage(version.id); }}>
+                        {busy ? 'Working…' : version.imageUrl ? 'New image' : 'Generate image'}
+                      </button>
                       {project.versions.length > 1 && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(version.id); }}>Remove</button>
+                        <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onRemove(version.id); }}>Remove</button>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
               <div className="footer">
-                <button type="button" className="btn ghost sm" onClick={onAdd}>+ Generate another version</button>
+                <button type="button" className="btn ghost sm" disabled={busy} onClick={onAdd}>{busy ? 'Working…' : '+ Generate another version'}</button>
                 <button type="button" className="btn ghost sm" onClick={() => project.versions.forEach((version, index) => setTimeout(() => download(version), index * 300))}>
                   Download all
                 </button>
@@ -120,7 +161,13 @@ export default function GenerateStep({ project, generating, think, bar, error, o
               <div className="card" style={{ marginTop: 14, padding: 14 }}>
                 <h4>Primary text</h4>
                 <p>{active.primary}</p>
-                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle}</p>
+                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel}</p>
+                {active.imagePrompt && (
+                  <details style={{ marginTop: 8 }}>
+                    <summary className="hint" style={{ cursor: 'pointer' }}>Image prompt sent to fal.ai</summary>
+                    <pre className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{active.imagePrompt}</pre>
+                  </details>
+                )}
               </div>
             </div>
             <div>
@@ -158,7 +205,8 @@ export default function GenerateStep({ project, generating, think, bar, error, o
                 ))}
               </select>
               <div className="footer">
-                <button type="button" className="btn ghost sm" onClick={() => onRewrite(active.id)}>Rewrite copy</button>
+                <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onRewrite(active.id)}>Rewrite copy</button>
+                <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onImage(active.id)}>{busy ? 'Working…' : 'Regenerate image'}</button>
                 <button type="button" className="btn sm" onClick={() => download(active)}>Download PNG</button>
               </div>
               <div className="footer" style={{ justifyContent: 'flex-start' }}>

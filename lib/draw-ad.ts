@@ -17,8 +17,22 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string
   return lines;
 }
 
-/** Draws one ad version. Text is painted, never inserted as HTML. */
-export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: string): void {
+function hexToRgb(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return [10, 12, 24];
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function coverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number): void {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const dw = image.naturalWidth * scale;
+  const dh = image.naturalHeight * scale;
+  ctx.drawImage(image, (width - dw) / 2, (height - dh) / 2, dw, dh);
+}
+
+/** Draws one ad version. Text is painted, never inserted as HTML. The generated Fal image, when loaded, is the backdrop. */
+export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: string, image?: HTMLImageElement | null): void {
   const [width, height] = version.size.split('x').map((n) => Number(n));
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return;
   canvas.width = width;
@@ -27,28 +41,44 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   if (!ctx) return;
   const pad = Math.round(width * 0.08);
   const maxW = width - pad * 2;
+  const hasImage = !!image && image.complete && image.naturalWidth > 0;
 
-  if (version.bg === 'gradient') {
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, version.c1);
-    gradient.addColorStop(1, version.c2);
-    ctx.fillStyle = gradient;
-  } else if (version.bg === 'solid') {
-    ctx.fillStyle = version.c1;
+  if (hasImage) {
+    coverImage(ctx, image, width, height);
+    // Scrim in the brand colour so the copy stays legible over the photo.
+    const [r, g, b] = hexToRgb(version.bg === 'light' ? '#FFFFFF' : version.c1);
+    const scrim = version.layout === 'bottom'
+      ? ctx.createLinearGradient(0, height * 0.45, 0, height)
+      : version.layout === 'center'
+        ? ctx.createRadialGradient(width / 2, height / 2, width * 0.1, width / 2, height / 2, width * 0.7)
+        : ctx.createLinearGradient(0, 0, width, 0);
+    scrim.addColorStop(0, `rgba(${r},${g},${b},${version.layout === 'bottom' ? 0 : 0.78})`);
+    scrim.addColorStop(1, `rgba(${r},${g},${b},${version.layout === 'bottom' ? 0.88 : version.layout === 'center' ? 0.15 : 0.05})`);
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, 0, width, height);
   } else {
-    ctx.fillStyle = '#F4F7FB';
-  }
-  ctx.fillRect(0, 0, width, height);
+    if (version.bg === 'gradient') {
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, version.c1);
+      gradient.addColorStop(1, version.c2);
+      ctx.fillStyle = gradient;
+    } else if (version.bg === 'solid') {
+      ctx.fillStyle = version.c1;
+    } else {
+      ctx.fillStyle = '#F4F7FB';
+    }
+    ctx.fillRect(0, 0, width, height);
 
-  ctx.globalAlpha = version.bg === 'light' ? 0.1 : 0.16;
-  ctx.fillStyle = version.bg === 'light' ? version.c2 : version.c3;
-  ctx.beginPath();
-  ctx.arc(width * 0.86, height * 0.14, width * 0.22, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(width * 0.1, height * 0.92, width * 0.18, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+    ctx.globalAlpha = version.bg === 'light' ? 0.1 : 0.16;
+    ctx.fillStyle = version.bg === 'light' ? version.c2 : version.c3;
+    ctx.beginPath();
+    ctx.arc(width * 0.86, height * 0.14, width * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(width * 0.1, height * 0.92, width * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   const ink = version.bg === 'light' ? version.c1 : version.c3;
   ctx.fillStyle = ink;

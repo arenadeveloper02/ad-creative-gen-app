@@ -40,6 +40,9 @@ export interface VersionDTO {
   c2: string;
   c3: string;
   size: string;
+  imageUrl: string | null;
+  imagePrompt: string | null;
+  imageError: string | null;
 }
 
 export interface ProjectDTO {
@@ -64,6 +67,7 @@ export interface ProjectDTO {
   headline: string;
   subline: string;
   avoid: string;
+  imageModel: string;
   step: number;
   status: string;
   updatedAt: string;

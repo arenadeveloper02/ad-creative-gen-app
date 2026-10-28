@@ -44,7 +44,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const name = brief.product || brief.brandName;
     if (name) data.name = name.slice(0, 120);
   }
-  if ('platform' in body || 'format' in body || 'tone' in body || 'copySource' in body) {
+  if ('platform' in body || 'format' in body || 'tone' in body || 'copySource' in body || 'imageModel' in body) {
     const platform = parsePlatform({ ...loaded, ...body });
     if ('error' in platform) return NextResponse.json({ error: platform.error }, { status: 400 });
     Object.assign(data, platform);

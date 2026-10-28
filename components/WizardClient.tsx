@@ -65,6 +65,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       { title: 'Reading your brief', detail: `Understanding ${project.product || project.brandName || 'the product'}`, state: 'wait' as const },
       { title: 'Checking platform and audience', detail: data.platform, state: 'wait' as const },
       { title: 'Writing the versions', detail: 'Two layouts from the saved brief', state: 'wait' as const },
+      { title: 'Rendering images on fal.ai', detail: `${data.imageModel} · one image per version`, state: 'wait' as const },
     ];
     setThink(steps);
     setBar(15);
@@ -80,14 +81,19 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       setStep(2);
       return;
     }
-    setThink((current) => current.map((item, index) => ({ ...item, state: index < 2 ? 'done' : 'run' })));
-    setBar(60);
+    setThink((current) => current.map((item, index) => ({ ...item, state: index < 2 ? 'done' : index === 2 ? 'run' : 'wait' })));
+    setBar(45);
+    const tick = window.setTimeout(() => {
+      setThink((current) => current.map((item, index) => ({ ...item, state: index < 3 ? 'done' : 'run' })));
+      setBar(70);
+    }, 1500);
     const generated = await fetch(`/api/projects/${project.id}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'replace' }),
     });
     const parsed = await readJson(generated);
+    window.clearTimeout(tick);
     setSaving(false);
     setBar(100);
     setThink((current) => current.map((item) => ({ ...item, state: 'done' })));
@@ -111,15 +117,19 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     }, 400);
   }
 
+  const [busy, setBusy] = useState(false);
+
   async function mutate(path: string, method: string, body?: unknown) {
     if (!project) return;
     setError(null);
+    setBusy(true);
     const res = await fetch(path, {
       method,
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
     const parsed = await readJson(res);
+    setBusy(false);
     if (!parsed.ok || !isProject(parsed.data)) {
       setError(parsed.ok ? 'Could not update the ad.' : parsed.error);
       return;
@@ -141,6 +151,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
         <GenerateStep
           project={project}
           generating={saving}
+          busy={busy}
           think={think}
           bar={bar}
           error={error}
@@ -149,6 +160,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           onAdd={() => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append' })}
           onRemove={(id) => void mutate(`/api/projects/${project.id}/versions/${id}`, 'DELETE')}
           onRewrite={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id })}
+          onImage={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'image', versionId: id })}
         />
       )}
     </>

@@ -1,5 +1,6 @@
 import { ASSET_KINDS, BACKGROUNDS, COPY_SOURCES, GOALS, LAYOUTS, PLATFORMS, SIZES, TONES, VISUAL_STYLES, type AssetKind, type Background, type CopySource, type Layout } from '@/lib/platforms';
 import { MAX_NAME, MAX_SHORT, MAX_TEXT, MAX_URL } from '@/lib/limits';
+import { canonicalImageModel, type ImageModel } from '@/lib/fal-models';
 
 const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 const ID_RE = /^[a-z0-9]{8,40}$/i;
@@ -111,6 +112,7 @@ export interface PlatformInput {
   headline: string;
   subline: string;
   avoid: string;
+  imageModel: ImageModel;
 }
 
 export function parsePlatform(body: Record<string, unknown>): PlatformInput | { error: string } {
@@ -129,6 +131,7 @@ export function parsePlatform(body: Record<string, unknown>): PlatformInput | { 
     headline: cleanText(body.headline, MAX_SHORT),
     subline: cleanText(body.subline, MAX_SHORT),
     avoid: cleanText(body.avoid, MAX_TEXT),
+    imageModel: canonicalImageModel(body.imageModel),
   };
 }
 

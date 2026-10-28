@@ -39,6 +39,7 @@ model AdProject {
   headline     String   @default("")
   subline      String   @default("")
   avoid        String   @default("")
+  imageModel   String   @default("nano-banana-2")
   step         Int      @default(1)
   status       String   @default("draft")
   createdAt    DateTime @default(now())
@@ -102,6 +103,10 @@ model AdVersion {
   c2        String
   c3        String
   size      String
+  imageUrl  String?
+  imagePrompt String?
+  imageModel  String?
+  imageError  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

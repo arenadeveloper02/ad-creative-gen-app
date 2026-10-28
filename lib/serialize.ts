@@ -33,6 +33,9 @@ function versionDTO(row: AdVersion): VersionDTO {
     c2: row.c2,
     c3: row.c3,
     size: row.size,
+    imageUrl: row.imageUrl,
+    imagePrompt: row.imagePrompt,
+    imageError: row.imageError,
   };
 }
 
@@ -59,6 +62,7 @@ export function serializeProject(row: AdProject & { assets: AssetRow[]; versions
     headline: row.headline,
     subline: row.subline,
     avoid: row.avoid,
+    imageModel: row.imageModel,
     step: row.step,
     status: row.status,
     updatedAt: row.updatedAt.toISOString(),
