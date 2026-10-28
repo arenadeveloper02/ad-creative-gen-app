@@ -82,11 +82,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } else if (mode === 'refresh') {
     const cfg = falConfigError();
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
-    const extra = project.versions.filter((item) => item.position >= 2);
-    if (extra.length > 0) {
-      await prisma.adVersion.deleteMany({ where: { id: { in: extra.map((item) => item.id) } } });
-    }
     const keep = project.versions.filter((item) => item.position < 2);
+    if (keep.length === 0) return NextResponse.json({ error: 'Generate the ad before refreshing the images.' }, { status: 400 });
     const results = await Promise.all(keep.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
     const failed = results.find((item) => !item.ok);
     if (failed && results.every((item) => !item.ok)) {
@@ -95,16 +92,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } else if (mode === 'append') {
     const cfg = falConfigError();
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
-    if (project.versions.length >= MAX_VERSIONS) {
+    const room = MAX_VERSIONS - project.versions.length;
+    if (room < 1) {
       return NextResponse.json({ error: `You can keep up to ${MAX_VERSIONS} versions.` }, { status: 400 });
     }
-    const resolved = await resolveDrafts(1, project.versions.length);
+    const asked = typeof body.count === 'number' && Number.isFinite(body.count) ? Math.floor(body.count) : 1;
+    if (asked < 1 || asked > room) {
+      return NextResponse.json({ error: `Choose between 1 and ${room} more version${room === 1 ? '' : 's'}.` }, { status: 400 });
+    }
+    const taken = project.versions.map((item) => item.headline).filter((item) => item.trim() !== '');
+    const resolved = await resolveDrafts(asked, project.versions.length, taken.length > 0 ? taken.join('; ') : undefined);
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
-    const draft = resolved.drafts[0];
-    const created = await prisma.adVersion.create({
-      data: { projectId: project.id, position: project.versions.length, ...draft, c1: project.c1, c2: project.c2, c3: project.c3 },
-    });
-    await generateVersionImage({ project, version: created, ownerEmail: email });
+    const created = [];
+    for (const [index, draft] of resolved.drafts.entries()) {
+      created.push(await prisma.adVersion.create({
+        data: { projectId: project.id, position: project.versions.length + index, ...draft, c1: project.c1, c2: project.c2, c3: project.c3 },
+      }));
+    }
+    const results = await Promise.all(created.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
+    const failed = results.find((item) => !item.ok);
+    if (failed && results.every((item) => !item.ok)) {
+      return NextResponse.json({ error: failed.error ?? 'Image generation failed.' }, { status: 502 });
+    }
   } else {
     const cfg = falConfigError();
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });

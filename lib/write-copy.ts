@@ -69,7 +69,7 @@ function briefText(project: AdProject, count: number, currentHeadline?: string):
     `Call to action: ${project.cta}`,
   ];
   if (project.avoid.trim()) lines.push(`Avoid: ${project.avoid.trim()}`);
-  if (currentHeadline) lines.push(`The current headline is "${currentHeadline}". Write a different one.`);
+  if (currentHeadline) lines.push(`Already used headlines: ${currentHeadline}. Write different ones.`);
   return lines.join('\n');
 }
 

@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { drawAd } from '@/lib/draw-ad';
+import { MAX_VERSIONS } from '@/lib/limits';
 import { SIZES } from '@/lib/platforms';
 import type { ProjectDTO, VersionDTO } from '@/lib/types';
+import { zipStored } from '@/lib/zip-store';
 
 interface GenerateStepProps {
   project: ProjectDTO;
@@ -15,6 +17,7 @@ interface GenerateStepProps {
   onBack: () => void;
   onPatch: (version: VersionDTO) => void;
   onRefresh: () => void;
+  onAdd: (count: number) => void;
   onRewrite: (id: string) => void;
   onImage: (id: string, editPrompt: string) => void;
 }
@@ -27,12 +30,15 @@ function isHttpsUrl(value: string | null): value is string {
   return typeof value === 'string' && /^https:\/\//i.test(value);
 }
 
-export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onRefresh, onRewrite, onImage }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [more, setMore] = useState(1);
+  const [zipNote, setZipNote] = useState<string | null>(null);
+  const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
 
   useEffect(() => {
@@ -40,6 +46,10 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
       setActiveId(project.versions[0]?.id ?? '');
     }
   }, [project.versions, activeId]);
+
+  useEffect(() => {
+    setMore((current) => Math.min(Math.max(1, current), Math.max(1, room)));
+  }, [room]);
 
   // Fal images are fetched once per URL with CORS so the canvas can export them.
   useEffect(() => {
@@ -72,8 +82,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
     const canvas = canvasRefs.current[version.id];
     if (!canvas) return;
     const link = document.createElement('a');
-    const safePlatform = project.platform.replace(/[^\w]+/g, '-').toLowerCase();
-    link.download = `ad-${safePlatform}-v${letter(version.position)}-${version.size}.png`;
+    link.download = fileName(version);
     try {
       link.href = canvas.toDataURL('image/png');
     } catch {
@@ -84,6 +93,68 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
       link.rel = 'noopener';
     }
     link.click();
+  }
+
+  function fileName(version: VersionDTO): string {
+    const safePlatform = project.platform.replace(/[^\w]+/g, '-').toLowerCase();
+    return `ad-${safePlatform}-v${letter(version.position)}-${version.size}.png`;
+  }
+
+  function canvasPng(canvas: HTMLCanvasElement): Promise<Uint8Array | null> {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(null);
+          return;
+        }
+        blob.arrayBuffer().then((buffer) => resolve(new Uint8Array(buffer))).catch(() => resolve(null));
+      }, 'image/png');
+    });
+  }
+
+  async function pngBytes(version: VersionDTO): Promise<Uint8Array | null> {
+    const canvas = canvasRefs.current[version.id];
+    if (canvas) {
+      const drawn = await canvasPng(canvas);
+      if (drawn) return drawn;
+    }
+    if (!isHttpsUrl(version.imageUrl)) return null;
+    try {
+      const res = await fetch(version.imageUrl);
+      if (!res.ok) return null;
+      return new Uint8Array(await res.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
+  async function downloadAll() {
+    setZipNote(null);
+    const files: { name: string; data: Uint8Array }[] = [];
+    for (const version of project.versions) {
+      const data = await pngBytes(version);
+      if (data) files.push({ name: fileName(version), data });
+    }
+    if (files.length === 0) {
+      setZipNote('Could not package the images. Use PNG on each version.');
+      return;
+    }
+    const blob = zipStored(files);
+    const link = document.createElement('a');
+    const safePlatform = project.platform.replace(/[^\w]+/g, '-').toLowerCase();
+    link.href = URL.createObjectURL(blob);
+    link.download = `ad-${safePlatform}-versions.zip`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    if (files.length < project.versions.length) setZipNote(`Packaged ${files.length} of ${project.versions.length} versions.`);
+  }
+
+  function addLabel(): string {
+    if (room === 0) return 'Version limit reached';
+    const start = project.versions.length;
+    const end = start + more - 1;
+    if (more === 1) return `Generate version ${letter(start)}`;
+    return `Generate versions ${letter(start)}–${letter(end)}`;
   }
 
   function imageState(version: VersionDTO): string {
@@ -163,12 +234,35 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                   </div>
                 ))}
               </div>
-              <div className="footer">
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
-                <button type="button" className="btn ghost sm" onClick={() => project.versions.forEach((version, index) => setTimeout(() => download(version), index * 300))}>
-                  Download all
+              <div className="more-row">
+                <div>
+                  <label htmlFor="moreCount">How many more versions?</label>
+                  <input
+                    id="moreCount"
+                    type="number"
+                    min={1}
+                    max={Math.max(1, room)}
+                    value={room === 0 ? 0 : more}
+                    disabled={busy || room === 0}
+                    onChange={(e) => {
+                      const next = Math.floor(Number(e.target.value));
+                      if (!Number.isFinite(next)) return;
+                      setMore(Math.min(room, Math.max(1, next)));
+                    }}
+                  />
+                </div>
+                <button type="button" className="btn sm" disabled={busy || room === 0} onClick={() => onAdd(more)}>
+                  {busy ? 'Working…' : addLabel()}
                 </button>
               </div>
+              <p className="hint">Versions A and B stay. New ones are added below, up to {MAX_VERSIONS} in total. Each gets its own copy and image.</p>
+              <div className="footer">
+                <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
+                <button type="button" className="btn ghost sm" onClick={() => void downloadAll()}>
+                  Download all versions
+                </button>
+              </div>
+              {zipNote && <p className="hint">{zipNote}</p>}
               <div className="card" style={{ marginTop: 14, padding: 14 }}>
                 <h4>Primary text</h4>
                 <p>{active.primary}</p>
