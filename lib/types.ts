@@ -67,6 +67,7 @@ export interface ProjectDTO {
   headline: string;
   subline: string;
   avoid: string;
+  copyPrompt: string;
   imageModel: string;
   step: number;
   status: string;

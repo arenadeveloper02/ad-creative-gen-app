@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 const RATES: Record<string, number> = {
   'studio:image': 0.04,
   'fal:image': 0.05,
+  'fal:text': 0.01,
 };
 
 export function estimateUsd(provider: string, kind: string): number {

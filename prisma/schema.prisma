@@ -39,6 +39,7 @@ model AdProject {
   headline     String   @default("")
   subline      String   @default("")
   avoid        String   @default("")
+  copyPrompt   String   @default("")
   imageModel   String   @default("nano-banana-2")
   step         Int      @default(1)
   status       String   @default("draft")

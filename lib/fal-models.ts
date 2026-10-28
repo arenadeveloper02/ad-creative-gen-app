@@ -1,5 +1,17 @@
 import { isRecord } from '@/lib/json';
 
+// Text copy goes through fal.ai as well, so the existing FAL_KEY is enough.
+export const LLM_ENDPOINT = 'fal-ai/any-llm';
+
+export function llmModel(): string {
+  const value = process.env.FAL_LLM_MODEL;
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : 'google/gemini-2.5-flash';
+}
+
+export function buildLlmInput(systemPrompt: string, prompt: string): Record<string, unknown> {
+  return { model: llmModel(), system_prompt: systemPrompt, prompt };
+}
+
 // ---------------------------------------------------------------------------
 // Every image choice maps to one fal.ai endpoint here. Same ids as the video
 // agent so the same models and the same per-image pricing apply.

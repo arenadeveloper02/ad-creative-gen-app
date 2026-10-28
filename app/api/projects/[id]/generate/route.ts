@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
-import { draftVersion, type CopyInput } from '@/lib/copy';
+import { draftVersion, type CopyInput, type VersionDraft } from '@/lib/copy';
 import { falConfigError } from '@/lib/fal';
 import { generateVersionImage } from '@/lib/generate-image';
+import { writeAdCopy } from '@/lib/write-copy';
 import { isId } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { MAX_VERSIONS } from '@/lib/limits';
@@ -27,6 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const project = await prisma.adProject.findFirst({ where: { id, ownerEmail: email }, include: projectWithAssets });
   if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+  const owned = project;
 
   const input: CopyInput = {
     product: project.product,
@@ -41,11 +43,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     subline: project.subline,
   };
 
+  async function resolveDrafts(count: number, startIndex: number, currentHeadline?: string): Promise<{ ok: true; drafts: VersionDraft[] } | { ok: false; error: string }> {
+    if (input.copySource !== 'ai') {
+      return { ok: true, drafts: Array.from({ length: count }, (_, index) => draftVersion(input, startIndex + index, owned.format)) };
+    }
+    const cfg = falConfigError();
+    if (cfg) return { ok: false, error: cfg };
+    const written = await writeAdCopy({ project: owned, count, currentHeadline, ownerEmail: email });
+    if (!written.ok) return written;
+    return {
+      ok: true,
+      drafts: written.lines.map((line, index) => ({
+        ...draftVersion(input, startIndex + index, owned.format),
+        headline: line.headline,
+        sub: line.sub,
+        primary: line.primary,
+      })),
+    };
+  }
+
   if (mode === 'rewrite') {
     if (!isId(body.versionId)) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
     const version = project.versions.find((item) => item.id === body.versionId);
     if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
-    const draft = draftVersion(input, version.position + 1, project.format);
+    const resolved = await resolveDrafts(1, version.position + 1, version.headline);
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
+    const draft = resolved.drafts[0];
     await prisma.adVersion.update({ where: { id: version.id }, data: { headline: draft.headline, sub: draft.sub, primary: draft.primary } });
   } else if (mode === 'image') {
     const cfg = falConfigError();
@@ -61,7 +84,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (project.versions.length >= MAX_VERSIONS) {
       return NextResponse.json({ error: `You can keep up to ${MAX_VERSIONS} versions.` }, { status: 400 });
     }
-    const draft = draftVersion(input, project.versions.length, project.format);
+    const resolved = await resolveDrafts(1, project.versions.length);
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
+    const draft = resolved.drafts[0];
     const created = await prisma.adVersion.create({
       data: { projectId: project.id, position: project.versions.length, ...draft, c1: project.c1, c2: project.c2, c3: project.c3 },
     });
@@ -69,7 +94,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } else {
     const cfg = falConfigError();
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
-    const drafts = [0, 1].map((index) => draftVersion(input, index, project.format));
+    const resolved = await resolveDrafts(2, 0);
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
+    const drafts = resolved.drafts;
     const created = await prisma.$transaction(async (tx) => {
       await tx.adVersion.deleteMany({ where: { projectId: project.id } });
       const rows = [];

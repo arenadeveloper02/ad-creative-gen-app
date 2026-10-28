@@ -64,7 +64,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     const steps = [
       { title: 'Reading your brief', detail: `Understanding ${project.product || project.brandName || 'the product'}`, state: 'wait' as const },
       { title: 'Checking platform and audience', detail: data.platform, state: 'wait' as const },
-      { title: 'Writing the versions', detail: 'Two layouts from the saved brief', state: 'wait' as const },
+      { title: 'Writing the versions', detail: data.copySource === 'ai' ? 'Gemini is writing the headline and primary text' : 'Using the copy you wrote', state: 'wait' as const },
       { title: 'Rendering images on fal.ai', detail: `${data.imageModel} · one image per version`, state: 'wait' as const },
     ];
     setThink(steps);

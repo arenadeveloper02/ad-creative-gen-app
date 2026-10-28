@@ -111,7 +111,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
             </div>
             <div>
               <h4>Creating your ads…</h4>
-              <p className="hint">Copy is written on the server; each image is rendered on fal.ai from your brief. This can take up to a minute.</p>
+              <p className="hint">Gemini writes the words from your copy prompt, then fal.ai renders each image. This can take up to a minute.</p>
               {think.map((step) => (
                 <div key={step.title} className={`think-step ${step.state}`}>
                   <span>{step.state === 'done' ? '✓' : step.state === 'run' ? '•' : '○'}</span>

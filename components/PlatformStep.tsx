@@ -16,6 +16,7 @@ export interface PlatformPayload {
   headline: string;
   subline: string;
   avoid: string;
+  copyPrompt: string;
   imageModel: ImageModel;
 }
 
@@ -39,6 +40,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const [headline, setHeadline] = useState(project.headline);
   const [subline, setSubline] = useState(project.subline);
   const [avoid, setAvoid] = useState(project.avoid);
+  const [copyPrompt, setCopyPrompt] = useState(project.copyPrompt);
   const [imageModel, setImageModel] = useState<ImageModel>(canonicalImageModel(project.imageModel));
   const modelHint = IMAGE_MODELS.find((m) => m.value === imageModel)?.hint ?? '';
 
@@ -122,9 +124,20 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
         </div>
         <p className="hint">
           {copySource === 'ai'
-            ? 'Copy is written on the server from your product, audience, tone, and offer.'
+            ? 'Type what the ad should say. Gemini writes a headline, supporting line, and primary text for each version.'
             : 'Write your own headline and supporting line. A blank field is filled on the server.'}
         </p>
+        {copySource === 'ai' && (
+          <>
+            <label htmlFor="copyPrompt">What should the copy say?</label>
+            <textarea
+              id="copyPrompt"
+              value={copyPrompt}
+              onChange={(e) => setCopyPrompt(e.target.value)}
+              placeholder="e.g. Get marketing leaders to book a 15-minute demo this week. Sound professional. Do not name competitors."
+            />
+          </>
+        )}
         {copySource === 'manual' && (
           <>
             <label htmlFor="headline">Headline</label>
@@ -146,7 +159,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
             type="button"
             className="btn"
             disabled={saving}
-            onClick={() => onGenerate({ platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, imageModel })}
+            onClick={() => onGenerate({ platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel })}
           >
             {saving ? 'Generating…' : 'Generate ad'}
           </button>

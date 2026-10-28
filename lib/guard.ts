@@ -112,6 +112,7 @@ export interface PlatformInput {
   headline: string;
   subline: string;
   avoid: string;
+  copyPrompt: string;
   imageModel: ImageModel;
 }
 
@@ -131,6 +132,7 @@ export function parsePlatform(body: Record<string, unknown>): PlatformInput | { 
     headline: cleanText(body.headline, MAX_SHORT),
     subline: cleanText(body.subline, MAX_SHORT),
     avoid: cleanText(body.avoid, MAX_TEXT),
+    copyPrompt: cleanText(body.copyPrompt, MAX_TEXT),
     imageModel: canonicalImageModel(body.imageModel),
   };
 }
