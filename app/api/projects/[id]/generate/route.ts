@@ -5,7 +5,7 @@ import { draftVersion, type CopyInput, type VersionDraft } from '@/lib/copy';
 import { falConfigError } from '@/lib/fal';
 import { generateVersionImage } from '@/lib/generate-image';
 import { writeAdCopy } from '@/lib/write-copy';
-import { isId } from '@/lib/guard';
+import { cleanText, isId } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { projectInclude, serializeProject, asCopySource } from '@/lib/serialize';
@@ -76,7 +76,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!isId(body.versionId)) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
     const version = project.versions.find((item) => item.id === body.versionId);
     if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
-    const result = await generateVersionImage({ project, version, ownerEmail: email });
+    const editPrompt = cleanText(body.editPrompt, 1000);
+    const result = await generateVersionImage({ project, version, ownerEmail: email, editPrompt });
     if (!result.ok) return NextResponse.json({ error: result.error ?? 'Image generation failed.' }, { status: 502 });
   } else if (mode === 'refresh') {
     const cfg = falConfigError();

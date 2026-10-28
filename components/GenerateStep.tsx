@@ -17,7 +17,7 @@ interface GenerateStepProps {
   onRefresh: () => void;
   onRemove: (id: string) => void;
   onRewrite: (id: string) => void;
-  onImage: (id: string) => void;
+  onImage: (id: string, editPrompt: string) => void;
 }
 
 function letter(index: number): string {
@@ -33,6 +33,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
+  const [edits, setEdits] = useState<Record<string, string>>({});
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
 
   useEffect(() => {
@@ -139,11 +140,20 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                     <canvas ref={(node) => { canvasRefs.current[version.id] = node; }} />
                     <div className="vcopy">{version.primary}</div>
                     <div className="hint" style={{ marginTop: 6 }}>{imageState(version)}</div>
+                    <label htmlFor={`edit-${version.id}`} className="hint" style={{ display: 'block', marginTop: 8 }}>What should change? Nano Banana 2 edits this image only.</label>
+                    <textarea
+                      id={`edit-${version.id}`}
+                      className="short"
+                      value={edits[version.id] ?? ''}
+                      placeholder="e.g. Remove the flowers on the table"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setEdits((current) => ({ ...current, [version.id]: e.target.value }))}
+                    />
                     <div className="vactions">
                       <button type="button" onClick={(e) => { e.stopPropagation(); setActiveId(version.id); }}>Edit</button>
                       <button type="button" onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
-                      <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onImage(version.id); }}>
-                        {busy ? 'Working…' : version.imageUrl ? 'New image' : 'Generate image'}
+                      <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onImage(version.id, edits[version.id] ?? ''); }}>
+                        {busy ? 'Working…' : (edits[version.id] ?? '').trim() ? 'Update this image' : version.imageUrl ? 'New image' : 'Generate image'}
                       </button>
                       {project.versions.length > 1 && (
                         <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onRemove(version.id); }}>Remove</button>

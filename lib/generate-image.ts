@@ -47,13 +47,47 @@ export interface GenerateImageResult {
   error: string | null;
 }
 
-/** Generates one Fal image for a version and stores the result on the row. */
+/** Generates one Fal image for a version and stores the result on the row. An edit note changes only that image through Nano Banana 2. */
 export async function generateVersionImage(opts: {
   project: AdProject & { assets: AssetMeta[] };
-  version: Pick<AdVersion, 'id' | 'position' | 'layout' | 'size' | 'c1' | 'c2' | 'c3'>;
+  version: Pick<AdVersion, 'id' | 'position' | 'layout' | 'size' | 'c1' | 'c2' | 'c3' | 'imageUrl'>;
   ownerEmail: string;
+  editPrompt?: string;
 }): Promise<GenerateImageResult> {
   const { project, version } = opts;
+  const change = opts.editPrompt?.trim() ?? '';
+  if (change !== '') {
+    if (!version.imageUrl || !/^https:\/\//i.test(version.imageUrl)) {
+      return { ok: false, imageUrl: null, prompt: change, error: 'This version has no image to edit yet.' };
+    }
+    const prompt = [
+      'Edit the attached advertising image.',
+      `Change only this: ${change}`,
+      'Keep the same people, product, logo, colours, and framing.',
+      'Do not add any words, letters, captions, or watermarks.',
+    ].join('\n');
+    const job = buildImageJob({ prompt, size: version.size, model: 'nano-banana-2', referenceImageUrls: [version.imageUrl] });
+    const run = await runFalJob(job.endpoint, job.input);
+    const imageUrl = run.ok ? readImageUrl(run.output) : null;
+    const error = run.ok ? (imageUrl ? null : 'Fal returned no image.') : (run.error ?? 'Image generation failed.');
+    await prisma.adVersion.update({
+      where: { id: version.id },
+      data: { imageUrl: imageUrl ?? version.imageUrl, imagePrompt: prompt, imageModel: job.endpoint, imageError: error },
+    });
+    if (imageUrl) {
+      await logUsage({
+        ownerEmail: opts.ownerEmail,
+        projectId: project.id,
+        kind: 'image',
+        provider: 'fal',
+        model: 'nano-banana-2',
+        meta: { versionId: version.id, endpoint: job.endpoint, requestId: run.requestId, edit: true },
+      });
+      if (run.requestId) await reportFalUsage({ email: opts.ownerEmail, endpointId: run.endpointId, requestId: run.requestId });
+    }
+    return { ok: imageUrl !== null, imageUrl, prompt, error };
+  }
+
   const model = canonicalImageModel(project.imageModel);
   const refs = await referenceUrls(project.assets);
   const prompt = buildImagePrompt({
