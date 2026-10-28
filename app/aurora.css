@@ -313,7 +313,7 @@ label .req { color: var(--aurora-c1); margin-left: 2px; }
 
 textarea, input[type="text"], input[type="number"], input[type="search"], select {
   width: 100%; background-color: var(--aurora-glass2); border: 1px solid var(--aurora-line);
-  border-radius: 16px; color: var(--aurora-text); padding: 16px 22px; font-size: 14px;
+  border-radius: 16px; color: var(--aurora-text); padding: 20px 24px; font-size: 15px; line-height: 1.5;
   font-family: inherit; outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
@@ -324,7 +324,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 44px;
   background-repeat: no-repeat; background-position: right 16px center; background-size: 16px 16px; }
 html.dark select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237f7ba6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 select option { color: #15132b; background: #fff; }
-textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+textarea { min-height: 140px; resize: vertical; line-height: 1.6; padding: 22px 24px; }
 textarea.script { min-height: 200px; }
 textarea.short { min-height: 72px; }
 input[type="range"] { width: 100%; accent-color: var(--aurora-c1); }

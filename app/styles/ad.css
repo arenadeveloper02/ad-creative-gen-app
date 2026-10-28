@@ -34,7 +34,7 @@
 .bar span { display: block; height: 100%; background: var(--aurora-grad-primary); transition: width 0.4s; }
 input[type='url'] {
   width: 100%; background-color: var(--aurora-glass2); border: 1px solid var(--aurora-line);
-  border-radius: 16px; color: var(--aurora-text); padding: 16px 22px; font-size: 14px; outline: none;
+  border-radius: 16px; color: var(--aurora-text); padding: 20px 24px; font-size: 15px; line-height: 1.5; outline: none;
 }
 .status-line { font-size: 12px; min-height: 18px; margin-top: 8px; color: var(--aurora-text3); }
 .status-line.ok { color: var(--aurora-done); }
