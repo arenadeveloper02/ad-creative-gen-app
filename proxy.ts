@@ -14,18 +14,6 @@ export function proxy(request: NextRequest) {
   }
 
   const fromQuery = parseEmail(request.nextUrl.searchParams.get('emailId'));
-  const fromCookie = parseEmail(request.cookies.get(ARENA_EMAIL_COOKIE_NAME)?.value);
-  const emailId = fromQuery || fromCookie;
-
-  if (!emailId) {
-    const deniedUrl = request.nextUrl.clone();
-    deniedUrl.pathname = '/access-denied';
-    deniedUrl.search = '';
-    const response = NextResponse.rewrite(deniedUrl);
-    response.headers.set('Content-Security-Policy', frameHeaders['Content-Security-Policy']);
-    response.headers.set('X-Content-Type-Options', 'nosniff');
-    return response;
-  }
 
   const response = NextResponse.next();
   response.headers.set('Content-Security-Policy', frameHeaders['Content-Security-Policy']);

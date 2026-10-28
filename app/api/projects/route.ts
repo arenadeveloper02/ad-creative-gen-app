@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { listProjects, claimAssets } from '@/lib/actions';
 import { parseBrief } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
@@ -9,14 +9,12 @@ import { projectInclude, serializeProject } from '@/lib/serialize';
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   return NextResponse.json(await listProjects(email));
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const body: unknown = await req.json().catch(() => null);
   if (!isRecord(body)) return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   const brief = parseBrief(body);

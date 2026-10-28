@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const events = await prisma.usageEvent.findMany({
     where: { ownerEmail: email },
     orderBy: { createdAt: 'desc' },

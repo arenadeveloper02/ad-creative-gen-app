@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { cleanFileName, isAssetKind, isId, svgIsUnsafe } from '@/lib/guard';
 import { MAX_BYTES, MAX_FILES } from '@/lib/limits';
 import { mimeAllowed } from '@/lib/platforms';
@@ -8,8 +8,7 @@ import { mimeAllowed } from '@/lib/platforms';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const form = await req.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: 'Expected a file upload.' }, { status: 400 });
   const file = form.get('file');

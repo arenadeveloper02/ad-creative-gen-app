@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { isId, parseBrief, parsePlatform } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { projectInclude, serializeProject } from '@/lib/serialize';
@@ -8,8 +8,7 @@ import { projectInclude, serializeProject } from '@/lib/serialize';
 export const dynamic = 'force-dynamic';
 
 async function loadOwned(id: string) {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   if (!isId(id)) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
   const row = await prisma.adProject.findFirst({ where: { id, ownerEmail: email }, include: projectInclude });
   if (!row) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });

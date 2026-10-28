@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { draftVersion, type CopyInput } from '@/lib/copy';
 import { isId } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
@@ -11,8 +11,7 @@ import { logUsage } from '@/lib/usage';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
   const body: unknown = await req.json().catch(() => null);

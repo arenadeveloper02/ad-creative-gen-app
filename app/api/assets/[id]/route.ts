@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { cleanFileName, isId } from '@/lib/guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: 'File not found.' }, { status: 404 });
   const asset = await prisma.adAsset.findFirst({ where: { id, ownerEmail: email } });

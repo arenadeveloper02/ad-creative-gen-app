@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { claimAssets } from '@/lib/actions';
 import { isId, parseProfile } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
@@ -9,8 +9,7 @@ import { profileInclude, serializeProfile } from '@/lib/serialize';
 export const dynamic = 'force-dynamic';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
   const existing = await prisma.brandProfile.findFirst({ where: { id, ownerEmail: email } });
@@ -39,8 +38,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
   const existing = await prisma.brandProfile.findFirst({ where: { id, ownerEmail: email }, select: { id: true } });

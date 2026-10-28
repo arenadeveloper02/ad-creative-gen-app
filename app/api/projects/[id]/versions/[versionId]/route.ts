@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getArenaEmailId } from '@/lib/arena-email';
+import { currentOwnerEmail } from '@/lib/arena-email';
 import { isId, parseVersionPatch } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { projectInclude, serializeProject } from '@/lib/serialize';
@@ -15,8 +15,7 @@ async function ownedVersion(projectId: string, versionId: string, email: string)
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; versionId: string }> }): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const { id, versionId } = await params;
   const version = await ownedVersion(id, versionId, email);
   if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
@@ -29,8 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string; versionId: string }> }): Promise<NextResponse> {
-  const email = await getArenaEmailId();
-  if (!email) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const email = await currentOwnerEmail();
   const { id, versionId } = await params;
   const version = await ownedVersion(id, versionId, email);
   if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
