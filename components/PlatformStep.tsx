@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canonicalImageModel, IMAGE_MODELS, type ImageModel } from '@/lib/fal-models';
 import { PLATFORMS, TONES, VISUAL_STYLES } from '@/lib/platforms';
 import type { ProjectDTO } from '@/lib/types';
@@ -26,9 +26,10 @@ interface PlatformStepProps {
   error: string | null;
   onBack: () => void;
   onGenerate: (data: PlatformPayload) => void;
+  onDraft: (data: PlatformPayload) => void;
 }
 
-export default function PlatformStep({ project, saving, error, onBack, onGenerate }: PlatformStepProps) {
+export default function PlatformStep({ project, saving, error, onBack, onGenerate, onDraft }: PlatformStepProps) {
   const [platform, setPlatform] = useState(project.platform);
   const formats = PLATFORMS[platform] ?? PLATFORMS['Meta (Facebook/Instagram)'];
   const [format, setFormat] = useState(formats.includes(project.format) ? project.format : formats[0]);
@@ -43,6 +44,18 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const [copyPrompt, setCopyPrompt] = useState(project.copyPrompt);
   const [imageModel, setImageModel] = useState<ImageModel>(canonicalImageModel(project.imageModel));
   const modelHint = IMAGE_MODELS.find((m) => m.value === imageModel)?.hint ?? '';
+
+  function currentPayload(): PlatformPayload {
+    return { platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel };
+  }
+
+  const onDraftRef = useRef(onDraft);
+  onDraftRef.current = onDraft;
+  useEffect(() => {
+    onDraftRef.current(currentPayload());
+    // currentPayload reads the fields listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel]);
 
   function pickPlatform(next: string) {
     setPlatform(next);
@@ -159,7 +172,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
             type="button"
             className="btn"
             disabled={saving}
-            onClick={() => onGenerate({ platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel })}
+            onClick={() => onGenerate(currentPayload())}
           >
             {saving ? 'Generating…' : 'Generate ad'}
           </button>

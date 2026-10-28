@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSET_KINDS, GOALS, type AssetKind } from '@/lib/platforms';
 import { readJson } from '@/lib/read-response';
 import type { AssetDTO, ProfileDTO, ProjectDTO } from '@/lib/types';
@@ -31,6 +31,7 @@ interface BriefStepProps {
   saving: boolean;
   error: string | null;
   onContinue: (data: BriefPayload) => void;
+  onDraft: (data: BriefPayload) => void;
   onProfiles: (profiles: ProfileDTO[]) => void;
 }
 
@@ -38,7 +39,7 @@ function fmtSize(bytes: number): string {
   return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-export default function BriefStep({ project, profiles, saving, error, onContinue, onProfiles }: BriefStepProps) {
+export default function BriefStep({ project, profiles, saving, error, onContinue, onDraft, onProfiles }: BriefStepProps) {
   const [description, setDescription] = useState(project?.description ?? '');
   const [goal, setGoal] = useState(project?.goal ?? 'Awareness');
   const [profileId, setProfileId] = useState(project?.profileId ?? '');
@@ -112,6 +113,19 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   async function removeAsset(id: string) {
     setAssets((current) => current.filter((item) => item.id !== id));
   }
+
+  function draftPayload(): BriefPayload {
+    const ids = assets.filter((item) => !selected?.assets.some((owned) => owned.id === item.id)).map((item) => item.id);
+    return payload(ids);
+  }
+
+  const onDraftRef = useRef(onDraft);
+  onDraftRef.current = onDraft;
+  useEffect(() => {
+    onDraftRef.current(draftPayload());
+    // draftPayload reads the fields listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, goal, brandName, product, guidelineUrl, profileId, c1, c2, c3, assets]);
 
   function payload(ids: string[]): BriefPayload {
     return {
@@ -329,7 +343,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             type="button"
             className="btn"
             disabled={saving || uploading}
-            onClick={() => onContinue(payload(assets.filter((item) => !selected?.assets.some((owned) => owned.id === item.id)).map((item) => item.id)))}
+            onClick={() => onContinue(draftPayload())}
           >
             {saving ? 'Saving…' : 'Next: platform'}
           </button>

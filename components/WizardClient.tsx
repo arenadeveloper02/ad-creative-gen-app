@@ -29,6 +29,12 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   const [think, setThink] = useState<{ title: string; detail: string; state: 'wait' | 'run' | 'done' }[]>([]);
   const [bar, setBar] = useState(0);
   const saveTimer = useRef<number | null>(null);
+  const draftTimer = useRef<number | null>(null);
+  const platformTimer = useRef<number | null>(null);
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const createLock = useRef<Promise<void> | null>(null);
+  const applyEpoch = useRef(0);
 
   function canGoto(target: number): boolean {
     if (target === 1) return true;
@@ -37,27 +43,77 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     return project.versions.length > 0 || project.step >= 3;
   }
 
-  async function saveBrief(data: BriefPayload) {
-    setSaving(true);
-    setError(null);
-    const res = await fetch(project ? `/api/projects/${project.id}` : '/api/projects', {
-      method: project ? 'PATCH' : 'POST',
+  function goto(next: number) {
+    if (!canGoto(next)) return;
+    applyEpoch.current += 1;
+    setStep(next);
+    const current = projectRef.current;
+    if (!current || current.step === next) return;
+    const updated = { ...current, step: next };
+    projectRef.current = updated;
+    setProject(updated);
+    void fetch(`/api/projects/${current.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: next }),
+    });
+  }
+
+  async function writeProject(data: object): Promise<ProjectDTO | null> {
+    const existing = projectRef.current;
+    const ticket = applyEpoch.current;
+    const res = await fetch(existing ? `/api/projects/${existing.id}` : '/api/projects', {
+      method: existing ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const parsed = await readJson(res);
-    setSaving(false);
     if (!parsed.ok || !isProject(parsed.data)) {
-      setError(parsed.ok ? 'Could not save the brief.' : parsed.error);
-      return;
+      setError(parsed.ok ? 'Could not save the ad.' : parsed.error);
+      return null;
     }
+    if (ticket !== applyEpoch.current) return parsed.data;
+    projectRef.current = parsed.data;
     setProject(parsed.data);
-    setStep(2);
-    if (!project) router.replace(`/project/${parsed.data.id}`);
+    if (!existing) router.replace(`/project/${parsed.data.id}`);
+    return parsed.data;
+  }
+
+  function queueBrief(data: BriefPayload) {
+    const meaningful = data.description !== '' || data.brandName !== '' || data.product !== '' || data.assetIds.length > 0;
+    if (!meaningful) return;
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    draftTimer.current = window.setTimeout(() => {
+      const job = writeProject(data).then(() => undefined);
+      createLock.current = job;
+      void job.finally(() => {
+        if (createLock.current === job) createLock.current = null;
+      });
+    }, 700);
+  }
+
+  function queuePlatform(data: PlatformPayload) {
+    if (!projectRef.current) return;
+    if (platformTimer.current) window.clearTimeout(platformTimer.current);
+    platformTimer.current = window.setTimeout(() => {
+      void writeProject(data);
+    }, 700);
+  }
+
+  async function saveBrief(data: BriefPayload) {
+    setSaving(true);
+    setError(null);
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    if (createLock.current) await createLock.current;
+    const saved = await writeProject({ ...data, step: 2 });
+    setSaving(false);
+    if (saved) setStep(2);
   }
 
   async function generate(data: PlatformPayload) {
     if (!project) return;
+    if (platformTimer.current) window.clearTimeout(platformTimer.current);
+    applyEpoch.current += 1;
     setSaving(true);
     setError(null);
     setStep(3);
@@ -140,12 +196,12 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   return (
     <>
       <AgentCrumb backHref="/" />
-      <Stepper step={step} canGoto={canGoto} onGoto={setStep} />
+      <Stepper step={step} canGoto={canGoto} onGoto={goto} />
       {step === 1 && (
-        <BriefStep project={project} profiles={profiles} saving={saving} error={error} onContinue={(data) => void saveBrief(data)} onProfiles={setProfiles} />
+        <BriefStep project={project} profiles={profiles} saving={saving} error={error} onContinue={(data) => void saveBrief(data)} onDraft={queueBrief} onProfiles={setProfiles} />
       )}
       {step === 2 && project && (
-        <PlatformStep project={project} saving={saving} error={error} onBack={() => setStep(1)} onGenerate={(data) => void generate(data)} />
+        <PlatformStep project={project} saving={saving} error={error} onBack={() => goto(1)} onGenerate={(data) => void generate(data)} onDraft={queuePlatform} />
       )}
       {step === 3 && project && (
         <GenerateStep

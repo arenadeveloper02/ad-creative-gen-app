@@ -39,7 +39,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       c1: brief.c1,
       c2: brief.c2,
       c3: brief.c3,
-      step: 2,
+      step: body.step === 2 ? 2 : 1,
       status: 'draft',
     },
   });

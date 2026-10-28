@@ -56,10 +56,14 @@ export default function ProjectsHome({ projects }: { projects: ProjectListItem[]
             <article key={item.id} className="card">
               <p className="eyebrow">{item.platform}</p>
               <h3>{item.name}</h3>
-              <p className="hint">Step {item.step} · {item.status}</p>
+              <p className="hint">
+                {item.status === 'draft'
+                  ? `Draft · left on ${item.step <= 1 ? 'Brief' : item.step === 2 ? 'Platform' : 'Generate'}`
+                  : `Ready · ${item.platform}`}
+              </p>
               <div className="footer">
                 <Link href={`/project/${item.id}`} className="btn sm">
-                  Open
+                  {item.status === 'draft' ? 'Continue' : 'Open'}
                 </Link>
                 <button type="button" className="btn ghost sm" onClick={() => void remove(item.id)}>
                   Delete
