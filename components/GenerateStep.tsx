@@ -15,7 +15,6 @@ interface GenerateStepProps {
   onBack: () => void;
   onPatch: (version: VersionDTO) => void;
   onRefresh: () => void;
-  onRemove: (id: string) => void;
   onRewrite: (id: string) => void;
   onImage: (id: string, editPrompt: string) => void;
 }
@@ -28,7 +27,7 @@ function isHttpsUrl(value: string | null): value is string {
   return typeof value === 'string' && /^https:\/\//i.test(value);
 }
 
-export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onRefresh, onRemove, onRewrite, onImage }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onRefresh, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
@@ -149,15 +148,17 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => setEdits((current) => ({ ...current, [version.id]: e.target.value }))}
                     />
+                    <button
+                      type="button"
+                      className="btn sm"
+                      style={{ marginTop: 8 }}
+                      disabled={busy || (edits[version.id] ?? '').trim() === ''}
+                      onClick={(e) => { e.stopPropagation(); onImage(version.id, edits[version.id] ?? ''); }}
+                    >
+                      {busy ? 'Working…' : 'Update this image'}
+                    </button>
                     <div className="vactions">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setActiveId(version.id); }}>Edit</button>
                       <button type="button" onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
-                      <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onImage(version.id, edits[version.id] ?? ''); }}>
-                        {busy ? 'Working…' : (edits[version.id] ?? '').trim() ? 'Update this image' : version.imageUrl ? 'New image' : 'Generate image'}
-                      </button>
-                      {project.versions.length > 1 && (
-                        <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onRemove(version.id); }}>Remove</button>
-                      )}
                     </div>
                   </div>
                 ))}
