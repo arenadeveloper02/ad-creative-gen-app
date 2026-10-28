@@ -35,28 +35,53 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   projectRef.current = project;
   const createLock = useRef<Promise<void> | null>(null);
   const applyEpoch = useRef(0);
+  const reachedRef = useRef(initialProject ? Math.max(initialProject.step, initialProject.versions.length > 0 ? 3 : 1) : 1);
+  const pendingBrief = useRef<BriefPayload | null>(null);
+  const pendingPlatform = useRef<PlatformPayload | null>(null);
+  const pendingVersion = useRef<VersionDTO | null>(null);
+
+  function furthest(): number {
+    const current = projectRef.current;
+    const fromProject = current ? Math.max(current.step, current.versions.length > 0 ? 3 : 1) : 1;
+    return Math.max(reachedRef.current, fromProject);
+  }
 
   function canGoto(target: number): boolean {
     if (target === 1) return true;
-    if (!project) return false;
-    if (target === 2) return project.step >= 2;
-    return project.versions.length > 0 || project.step >= 3;
+    if (!projectRef.current) return false;
+    return target <= furthest();
+  }
+
+  async function flushPending(): Promise<void> {
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    if (platformTimer.current) window.clearTimeout(platformTimer.current);
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    if (createLock.current) await createLock.current;
+    const current = projectRef.current;
+    if (pendingBrief.current) {
+      const data = pendingBrief.current;
+      pendingBrief.current = null;
+      await writeProject(data);
+    }
+    if (pendingPlatform.current && projectRef.current) {
+      const data = pendingPlatform.current;
+      pendingPlatform.current = null;
+      await writeProject(data);
+    }
+    if (pendingVersion.current && current) {
+      const version = pendingVersion.current;
+      pendingVersion.current = null;
+      await fetch(`/api/projects/${current.id}/versions/${version.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(version),
+      });
+    }
   }
 
   function goto(next: number) {
     if (!canGoto(next)) return;
-    applyEpoch.current += 1;
-    setStep(next);
-    const current = projectRef.current;
-    if (!current || current.step === next) return;
-    const updated = { ...current, step: next };
-    projectRef.current = updated;
-    setProject(updated);
-    void fetch(`/api/projects/${current.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ step: next }),
-    });
+    void flushPending().then(() => setStep(next));
   }
 
   async function writeProject(data: object): Promise<ProjectDTO | null> {
@@ -81,6 +106,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
 
   function queueBrief(data: BriefPayload) {
     const meaningful = data.description !== '' || data.brandName !== '' || data.product !== '' || data.assetIds.length > 0;
+    pendingBrief.current = meaningful ? data : null;
     if (!meaningful) return;
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
     draftTimer.current = window.setTimeout(() => {
@@ -93,6 +119,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   }
 
   function queuePlatform(data: PlatformPayload) {
+    pendingPlatform.current = data;
     if (!projectRef.current) return;
     if (platformTimer.current) window.clearTimeout(platformTimer.current);
     platformTimer.current = window.setTimeout(() => {
@@ -105,14 +132,19 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     setError(null);
     if (draftTimer.current) window.clearTimeout(draftTimer.current);
     if (createLock.current) await createLock.current;
+    pendingBrief.current = null;
     const saved = await writeProject({ ...data, step: 2 });
     setSaving(false);
-    if (saved) setStep(2);
+    if (saved) {
+      reachedRef.current = Math.max(reachedRef.current, 2);
+      setStep(2);
+    }
   }
 
   async function generate(data: PlatformPayload) {
     if (!project) return;
     if (platformTimer.current) window.clearTimeout(platformTimer.current);
+    pendingPlatform.current = null;
     applyEpoch.current += 1;
     setSaving(true);
     setError(null);
@@ -157,11 +189,14 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       setError(parsed.ok ? 'Could not generate the ad.' : parsed.error);
       return;
     }
+    reachedRef.current = Math.max(reachedRef.current, 3);
+    projectRef.current = parsed.data;
     setProject(parsed.data);
   }
 
   function queuePatch(version: VersionDTO) {
     if (!project) return;
+    pendingVersion.current = version;
     setProject({ ...project, versions: project.versions.map((item) => (item.id === version.id ? version : item)) });
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
@@ -190,6 +225,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       setError(parsed.ok ? 'Could not update the ad.' : parsed.error);
       return;
     }
+    projectRef.current = parsed.data;
     setProject(parsed.data);
   }
 
@@ -211,9 +247,9 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           think={think}
           bar={bar}
           error={error}
-          onBack={() => setStep(2)}
+          onBack={() => goto(2)}
           onPatch={queuePatch}
-          onAdd={() => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append' })}
+          onRefresh={() => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'refresh' })}
           onRemove={(id) => void mutate(`/api/projects/${project.id}/versions/${id}`, 'DELETE')}
           onRewrite={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id })}
           onImage={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'image', versionId: id })}

@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!isId(id)) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
   const body: unknown = await req.json().catch(() => null);
   if (!isRecord(body)) return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
-  const mode = body.mode === 'append' || body.mode === 'rewrite' || body.mode === 'image' ? body.mode : 'replace';
+  const mode = body.mode === 'append' || body.mode === 'rewrite' || body.mode === 'image' || body.mode === 'refresh' ? body.mode : 'replace';
 
   const project = await prisma.adProject.findFirst({ where: { id, ownerEmail: email }, include: projectWithAssets });
   if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
@@ -78,6 +78,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
     const result = await generateVersionImage({ project, version, ownerEmail: email });
     if (!result.ok) return NextResponse.json({ error: result.error ?? 'Image generation failed.' }, { status: 502 });
+  } else if (mode === 'refresh') {
+    const cfg = falConfigError();
+    if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
+    const extra = project.versions.filter((item) => item.position >= 2);
+    if (extra.length > 0) {
+      await prisma.adVersion.deleteMany({ where: { id: { in: extra.map((item) => item.id) } } });
+    }
+    const keep = project.versions.filter((item) => item.position < 2);
+    const results = await Promise.all(keep.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
+    const failed = results.find((item) => !item.ok);
+    if (failed && results.every((item) => !item.ok)) {
+      return NextResponse.json({ error: failed.error ?? 'Image generation failed.' }, { status: 502 });
+    }
   } else if (mode === 'append') {
     const cfg = falConfigError();
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });

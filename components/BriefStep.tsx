@@ -58,7 +58,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
   const selected = profiles.find((item) => item.id === profileId) ?? null;
   const isNew = profileId === '__new__';
-  const showFields = profileId !== '';
+  const showFields = profileId !== '' || brandName !== '' || product !== '';
 
   const grouped = useMemo(() => {
     const map: Record<string, AssetDTO[]> = {};

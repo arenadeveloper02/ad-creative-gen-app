@@ -14,7 +14,7 @@ interface GenerateStepProps {
   error: string | null;
   onBack: () => void;
   onPatch: (version: VersionDTO) => void;
-  onAdd: () => void;
+  onRefresh: () => void;
   onRemove: (id: string) => void;
   onRewrite: (id: string) => void;
   onImage: (id: string) => void;
@@ -28,7 +28,7 @@ function isHttpsUrl(value: string | null): value is string {
   return typeof value === 'string' && /^https:\/\//i.test(value);
 }
 
-export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onAdd, onRemove, onRewrite, onImage }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onRefresh, onRemove, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
@@ -153,7 +153,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                 ))}
               </div>
               <div className="footer">
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={onAdd}>{busy ? 'Working…' : '+ Generate another version'}</button>
+                <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
                 <button type="button" className="btn ghost sm" onClick={() => project.versions.forEach((version, index) => setTimeout(() => download(version), index * 300))}>
                   Download all
                 </button>
@@ -206,7 +206,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
               </select>
               <div className="footer">
                 <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onRewrite(active.id)}>Rewrite copy</button>
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onImage(active.id)}>{busy ? 'Working…' : 'Regenerate image'}</button>
+                <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
                 <button type="button" className="btn sm" onClick={() => download(active)}>Download PNG</button>
               </div>
               <div className="footer" style={{ justifyContent: 'flex-start' }}>
