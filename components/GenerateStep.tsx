@@ -79,19 +79,23 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
   }
 
   function download(version: VersionDTO) {
-    const canvas = canvasRefs.current[version.id];
-    if (!canvas) return;
     const link = document.createElement('a');
     link.download = fileName(version);
-    try {
-      link.href = canvas.toDataURL('image/png');
-    } catch {
-      // Canvas is tainted when the image host blocks CORS: hand over the raw image instead.
-      if (!isHttpsUrl(version.imageUrl)) return;
-      link.href = version.imageUrl;
-      link.target = '_blank';
-      link.rel = 'noopener';
+    const painted = isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] === true;
+    const canvas = canvasRefs.current[version.id];
+    if (painted && canvas) {
+      try {
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        return;
+      } catch {
+        // Canvas is tainted when the image host blocks CORS: hand over the raw image instead.
+      }
     }
+    if (!isHttpsUrl(version.imageUrl)) return;
+    link.href = version.imageUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
     link.click();
   }
 
@@ -149,13 +153,20 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
     if (files.length < project.versions.length) setZipNote(`Packaged ${files.length} of ${project.versions.length} versions.`);
   }
 
-  function addLabel(): string {
-    if (room === 0) return 'Version limit reached';
+  function plannedLetters(): string {
     const start = project.versions.length;
-    const end = start + more - 1;
-    if (more === 1) return `Generate version ${letter(start)}`;
-    return `Generate versions ${letter(start)}–${letter(end)}`;
+    const names = Array.from({ length: more }, (_, index) => letter(start + index));
+    if (names.length <= 1) return names[0] ?? '';
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
   }
+
+  function imageReady(version: VersionDTO): boolean {
+    if (!isHttpsUrl(version.imageUrl)) return false;
+    return loadedUrls[version.imageUrl] !== undefined;
+  }
+
+  const allReady = project.versions.length > 0 && project.versions.every(imageReady);
 
   function imageState(version: VersionDTO): string {
     if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] === false ? 'Image could not be displayed' : loadedUrls[version.imageUrl] ? 'fal.ai image' : 'Loading image…';
@@ -210,7 +221,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                     <canvas ref={(node) => { canvasRefs.current[version.id] = node; }} />
                     <div className="vcopy">{version.primary}</div>
                     <div className="hint" style={{ marginTop: 6 }}>{imageState(version)}</div>
-                    <label htmlFor={`edit-${version.id}`} className="hint" style={{ display: 'block', marginTop: 8 }}>What should change? Nano Banana 2 edits this image only.</label>
+                    <label htmlFor={`edit-${version.id}`} className="hint" style={{ display: 'block', marginTop: 8 }}>What should change? Nano Banana Pro edits this image only.</label>
                     <textarea
                       id={`edit-${version.id}`}
                       className="short"
@@ -229,7 +240,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                       {busy ? 'Working…' : 'Update this image'}
                     </button>
                     <div className="vactions">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
+                      <button type="button" disabled={!imageReady(version) || busy} onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
                     </div>
                   </div>
                 ))}
@@ -252,16 +263,21 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                   />
                 </div>
                 <button type="button" className="btn sm" disabled={busy || room === 0} onClick={() => onAdd(more)}>
-                  {busy ? 'Working…' : addLabel()}
+                  {busy ? 'Working…' : room === 0 ? 'Version limit reached' : `Generate ${more}`}
                 </button>
               </div>
-              <p className="hint">Versions A and B stay. New ones are added below, up to {MAX_VERSIONS} in total. Each gets its own copy and image.</p>
+              <p className="hint">
+                {room === 0
+                  ? `You already have ${MAX_VERSIONS} versions.`
+                  : `The number is how many new versions to add. ${more} makes ${plannedLetters()}. A and B stay. Up to ${MAX_VERSIONS} in total.`}
+              </p>
               <div className="footer">
                 <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
-                <button type="button" className="btn ghost sm" onClick={() => void downloadAll()}>
+                <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
                   Download all versions
                 </button>
               </div>
+              {!allReady && <p className="hint">Download opens after every image has finished.</p>}
               {zipNote && <p className="hint">{zipNote}</p>}
               <div className="card" style={{ marginTop: 14, padding: 14 }}>
                 <h4>Primary text</h4>
@@ -312,7 +328,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
               <div className="footer">
                 <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onRewrite(active.id)}>Rewrite copy</button>
                 <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
-                <button type="button" className="btn sm" onClick={() => download(active)}>Download PNG</button>
+                <button type="button" className="btn sm" disabled={busy || !imageReady(active)} onClick={() => download(active)}>Download PNG</button>
               </div>
               <div className="footer" style={{ justifyContent: 'flex-start' }}>
                 <button type="button" className="btn ghost sm" onClick={onBack}>Change platform / brief</button>

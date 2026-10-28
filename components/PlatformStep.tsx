@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { canonicalImageModel, IMAGE_MODELS, type ImageModel } from '@/lib/fal-models';
+import type { ImageModel } from '@/lib/fal-models';
 import { PLATFORMS, TONES, VISUAL_STYLES } from '@/lib/platforms';
 import type { ProjectDTO } from '@/lib/types';
 
@@ -42,8 +42,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const [subline, setSubline] = useState(project.subline);
   const [avoid, setAvoid] = useState(project.avoid);
   const [copyPrompt, setCopyPrompt] = useState(project.copyPrompt);
-  const [imageModel, setImageModel] = useState<ImageModel>(canonicalImageModel(project.imageModel));
-  const modelHint = IMAGE_MODELS.find((m) => m.value === imageModel)?.hint ?? '';
+  const imageModel: ImageModel = 'nano-banana-pro';
 
   function currentPayload(): PlatformPayload {
     return { platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel };
@@ -116,15 +115,8 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
           </div>
         </div>
 
-        <label>Image model (fal.ai)</label>
-        <div className="chips">
-          {IMAGE_MODELS.map((item) => (
-            <button key={item.value} type="button" className={`chip${imageModel === item.value ? ' on' : ''}`} onClick={() => setImageModel(item.value)}>
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <p className="hint">{modelHint}. Each version renders one image from your brief, brand colours, logo and reference creatives.</p>
+        <label>Image model</label>
+        <p className="hint">Every image is made with Nano Banana Pro on fal.ai at 4K, the highest resolution that model accepts. The first generate makes versions A and B. Extra versions use the same model.</p>
 
         <label>Ad copy source</label>
         <div className="chips">

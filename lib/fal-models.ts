@@ -18,6 +18,7 @@ export function buildLlmInput(systemPrompt: string, prompt: string): Record<stri
 // ---------------------------------------------------------------------------
 
 export const IMAGE_MODELS = [
+  { value: 'nano-banana-pro', label: 'Nano Banana Pro', hint: 'Highest quality · 4K PNG' },
   { value: 'nano-banana-2', label: 'Nano Banana 2', hint: 'Best prompt accuracy · ~$0.05 / image' },
   { value: 'nano-banana', label: 'Nano Banana', hint: 'Fast · ~$0.05 / image' },
   { value: 'gpt-image-1', label: 'GPT Image 1', hint: 'Strong text in image · ~$0.05 / image' },
@@ -25,7 +26,7 @@ export const IMAGE_MODELS = [
 ] as const;
 
 export type ImageModel = (typeof IMAGE_MODELS)[number]['value'];
-export const DEFAULT_IMAGE_MODEL: ImageModel = 'nano-banana-2';
+export const DEFAULT_IMAGE_MODEL: ImageModel = 'nano-banana-pro';
 
 export function isImageModel(value: unknown): value is ImageModel {
   return typeof value === 'string' && IMAGE_MODELS.some((model) => model.value === value);
@@ -88,11 +89,20 @@ export function buildImageJob(opts: { prompt: string; size: string; model: Image
   const refs = opts.referenceImageUrls.filter((u) => /^https:\/\//i.test(u)).slice(0, 6);
   const nano = NANO_RATIOS.has(ratio) ? ratio : '1:1';
   switch (opts.model) {
-    case 'nano-banana-2':
+    case 'nano-banana-pro': {
+      const quality = { resolution: '4K', num_images: 1, output_format: 'png', thinking_level: 'high' };
       if (refs.length > 0) {
-        return { endpoint: 'fal-ai/nano-banana-2/edit', input: { prompt: opts.prompt, image_urls: refs, aspect_ratio: nano, resolution: '1K', num_images: 1, output_format: 'png' } };
+        return { endpoint: 'fal-ai/nano-banana-pro/edit', input: { prompt: opts.prompt, image_urls: refs, aspect_ratio: nano, ...quality } };
       }
-      return { endpoint: 'fal-ai/nano-banana-2', input: { prompt: opts.prompt, aspect_ratio: nano, resolution: '1K', num_images: 1, output_format: 'png' } };
+      return { endpoint: 'fal-ai/nano-banana-pro', input: { prompt: opts.prompt, aspect_ratio: nano, ...quality } };
+    }
+    case 'nano-banana-2': {
+      const quality = { resolution: '4K', num_images: 1, output_format: 'png', thinking_level: 'high' };
+      if (refs.length > 0) {
+        return { endpoint: 'fal-ai/nano-banana-2/edit', input: { prompt: opts.prompt, image_urls: refs, aspect_ratio: nano, ...quality } };
+      }
+      return { endpoint: 'fal-ai/nano-banana-2', input: { prompt: opts.prompt, aspect_ratio: nano, ...quality } };
+    }
     case 'nano-banana':
       if (refs.length > 0) {
         return { endpoint: 'fal-ai/nano-banana/edit', input: { prompt: opts.prompt, image_urls: refs, num_images: 1, output_format: 'png' } };

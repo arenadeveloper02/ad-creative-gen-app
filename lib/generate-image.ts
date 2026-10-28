@@ -1,7 +1,7 @@
 import type { AdAsset, AdProject, AdVersion } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { falKey, runFalJob } from '@/lib/fal';
-import { buildImageJob, canonicalImageModel, readImageUrl } from '@/lib/fal-models';
+import { buildImageJob, readImageUrl } from '@/lib/fal-models';
 import { buildImagePrompt } from '@/lib/image-prompt';
 import { logUsage, reportFalUsage } from '@/lib/usage';
 import type { Layout } from '@/lib/platforms';
@@ -47,7 +47,7 @@ export interface GenerateImageResult {
   error: string | null;
 }
 
-/** Generates one Fal image for a version and stores the result on the row. An edit note changes only that image through Nano Banana 2. */
+/** Generates one Fal image for a version and stores the result on the row. Every image, including an edit, uses Nano Banana Pro at 4K. */
 export async function generateVersionImage(opts: {
   project: AdProject & { assets: AssetMeta[] };
   version: Pick<AdVersion, 'id' | 'position' | 'layout' | 'size' | 'c1' | 'c2' | 'c3' | 'imageUrl'>;
@@ -66,8 +66,8 @@ export async function generateVersionImage(opts: {
       'Keep the same people, product, logo, colours, and framing.',
       'Do not add any words, letters, captions, or watermarks.',
     ].join('\n');
-    const job = buildImageJob({ prompt, size: version.size, model: 'nano-banana-2', referenceImageUrls: [version.imageUrl] });
-    const run = await runFalJob(job.endpoint, job.input);
+    const job = buildImageJob({ prompt, size: version.size, model: 'nano-banana-pro', referenceImageUrls: [version.imageUrl] });
+    const run = await runFalJob(job.endpoint, job.input, 180000);
     const imageUrl = run.ok ? readImageUrl(run.output) : null;
     const error = run.ok ? (imageUrl ? null : 'Fal returned no image.') : (run.error ?? 'Image generation failed.');
     await prisma.adVersion.update({
@@ -80,7 +80,7 @@ export async function generateVersionImage(opts: {
         projectId: project.id,
         kind: 'image',
         provider: 'fal',
-        model: 'nano-banana-2',
+        model: 'nano-banana-pro',
         meta: { versionId: version.id, endpoint: job.endpoint, requestId: run.requestId, edit: true },
       });
       if (run.requestId) await reportFalUsage({ email: opts.ownerEmail, endpointId: run.endpointId, requestId: run.requestId });
@@ -88,7 +88,7 @@ export async function generateVersionImage(opts: {
     return { ok: imageUrl !== null, imageUrl, prompt, error };
   }
 
-  const model = canonicalImageModel(project.imageModel);
+  const model = 'nano-banana-pro' as const;
   const refs = await referenceUrls(project.assets);
   const prompt = buildImagePrompt({
     description: project.description,
@@ -111,7 +111,7 @@ export async function generateVersionImage(opts: {
   });
 
   const job = buildImageJob({ prompt, size: version.size, model, referenceImageUrls: refs.urls });
-  const run = await runFalJob(job.endpoint, job.input);
+  const run = await runFalJob(job.endpoint, job.input, 180000);
   const imageUrl = run.ok ? readImageUrl(run.output) : null;
   const error = run.ok ? (imageUrl ? null : 'Fal returned no image.') : (run.error ?? 'Image generation failed.');
 
