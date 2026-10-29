@@ -27,7 +27,7 @@
 .vactions button { background: none; border: 0; padding: 0; color: var(--aurora-accent); font-size: 12px; cursor: pointer; }
 .vactions button:disabled { color: var(--aurora-text3); cursor: default; }
 .more-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 18px; }
-.more-row input[type='number'] { width: 96px; }
+.more-row input[type='text'] { width: 160px; }
 .gen-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
 .think-step { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--aurora-text3); padding: 6px 0; }
 .think-step.run { color: var(--aurora-text); font-weight: 600; }

@@ -36,7 +36,7 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [more, setMore] = useState(1);
+  const [moreText, setMoreText] = useState('1');
   const [zipNote, setZipNote] = useState<string | null>(null);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
@@ -46,10 +46,6 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
       setActiveId(project.versions[0]?.id ?? '');
     }
   }, [project.versions, activeId]);
-
-  useEffect(() => {
-    setMore((current) => Math.min(Math.max(1, current), Math.max(1, room)));
-  }, [room]);
 
   // Fal images are fetched once per URL with CORS so the canvas can export them.
   useEffect(() => {
@@ -153,9 +149,16 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
     if (files.length < project.versions.length) setZipNote(`Packaged ${files.length} of ${project.versions.length} versions.`);
   }
 
-  function plannedLetters(): string {
+  function typedCount(): number | null {
+    if (!/^\d+$/.test(moreText)) return null;
+    const next = Number(moreText);
+    if (next < 1 || next > room) return null;
+    return next;
+  }
+
+  function plannedLetters(count: number): string {
     const start = project.versions.length;
-    const names = Array.from({ length: more }, (_, index) => letter(start + index));
+    const names = Array.from({ length: count }, (_, index) => letter(start + index));
     if (names.length <= 1) return names[0] ?? '';
     if (names.length === 2) return `${names[0]} and ${names[1]}`;
     return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
@@ -250,26 +253,25 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                   <label htmlFor="moreCount">How many more versions?</label>
                   <input
                     id="moreCount"
-                    type="number"
-                    min={1}
-                    max={Math.max(1, room)}
-                    value={room === 0 ? 0 : more}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="4"
+                    value={moreText}
                     disabled={busy || room === 0}
-                    onChange={(e) => {
-                      const next = Math.floor(Number(e.target.value));
-                      if (!Number.isFinite(next)) return;
-                      setMore(Math.min(room, Math.max(1, next)));
-                    }}
+                    onChange={(e) => setMoreText(e.target.value.replace(/\D/g, '').slice(0, 2))}
                   />
                 </div>
-                <button type="button" className="btn sm" disabled={busy || room === 0} onClick={() => onAdd(more)}>
-                  {busy ? 'Working…' : room === 0 ? 'Version limit reached' : `Generate ${more}`}
+                <button type="button" className="btn sm" disabled={busy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) onAdd(count); }}>
+                  {busy ? 'Working…' : typedCount() === null ? 'Generate' : `Generate ${typedCount()}`}
                 </button>
               </div>
               <p className="hint">
                 {room === 0
                   ? `You already have ${MAX_VERSIONS} versions.`
-                  : `The number is how many new versions to add. ${more} makes ${plannedLetters()}. A and B stay. Up to ${MAX_VERSIONS} in total.`}
+                  : typedCount() === null
+                    ? `Type a number from 1 to ${room}, such as 4, 5, or 6.`
+                    : `Type a number, such as 4, 5, or 6. ${typedCount()} makes ${plannedLetters(typedCount() ?? 1)}. Up to ${MAX_VERSIONS} in total.`}
               </p>
               <div className="footer">
                 <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
