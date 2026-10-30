@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { positionPatch, resolveTextBoxes, type TextKind } from '@/lib/ad-layout';
+import { positionPatch, type TextBox, type TextKind } from '@/lib/ad-layout';
 import { drawAd } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { SIZES } from '@/lib/platforms';
@@ -497,14 +497,17 @@ function AdStage({
   const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number } | null>(null);
   const [frame, setFrame] = useState({ sw: 1, sh: 1, cw: 1, ch: 1 });
   const [dragLive, setDragLive] = useState<{ kind: TextKind; x: number; y: number } | null>(null);
+  const [boxes, setBoxes] = useState<TextBox[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const [cw, ch] = version.size.split('x').map((n) => Number(n));
     const painted = dragLive
-      ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, canvas.width || 1, canvas.height || 1) }
+      ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, cw || 1, ch || 1) }
       : version;
-    drawAd(canvas, painted, brand, image);
+    // drawAd measures the real text, so the handles match what is painted.
+    setBoxes(drawAd(canvas, painted, brand, image));
     const stage = stageRef.current;
     if (!stage) return;
     const sync = () => {
@@ -517,11 +520,6 @@ function AdStage({
     return () => ro.disconnect();
   }, [version, brand, image, dragLive]);
 
-  const boxes = resolveTextBoxes(
-    dragLive
-      ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, frame.cw, frame.ch) }
-      : version,
-  );
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
 
@@ -549,8 +547,11 @@ function AdStage({
     const stage = stageRef.current;
     if (!drag || !stage) return;
     const rect = stage.getBoundingClientRect();
-    const x = Math.min(frame.cw - 8, Math.max(0, (event.clientX - rect.left - drag.ox) / scaleX));
-    const y = Math.min(frame.ch - 8, Math.max(0, (event.clientY - rect.top - drag.oy) / scaleY));
+    const box = boxes.find((item) => item.kind === drag.kind);
+    const maxX = Math.max(0, frame.cw - (box?.w ?? 0));
+    const maxY = Math.max(0, frame.ch - (box?.h ?? 0));
+    const x = Math.min(maxX, Math.max(0, (event.clientX - rect.left - drag.ox) / scaleX));
+    const y = Math.min(maxY, Math.max(0, (event.clientY - rect.top - drag.oy) / scaleY));
     drag.x = x;
     drag.y = y;
     setDragLive({ kind: drag.kind, x, y });
@@ -583,10 +584,10 @@ function AdStage({
           key={box.kind}
           className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}`}
           style={{
-            left: box.x * scaleX,
-            top: box.y * scaleY,
-            width: Math.max(box.w * scaleX, 48),
-            height: Math.max(box.h * scaleY, 28),
+            left: box.x * scaleX - 6,
+            top: box.y * scaleY - 6,
+            width: box.w * scaleX + 12,
+            height: box.h * scaleY + 12,
           }}
           onPointerDown={(event) => onPointerDown(box.kind, event)}
           onPointerMove={onPointerMove}

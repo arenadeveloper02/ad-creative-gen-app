@@ -22,14 +22,20 @@
 .vcard canvas { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--aurora-inset); }
 .ad-stage { position: relative; width: 100%; border-radius: 12px; overflow: hidden; touch-action: none; }
 .ad-stage canvas { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--aurora-inset); }
+/* Handles are invisible until hover so the ad reads clean. The tag sits above the box, never over the text. */
 .ad-handle {
-  position: absolute; box-sizing: border-box; border: 1.5px dashed rgba(255, 255, 255, 0.75);
-  border-radius: 8px; cursor: grab; background: rgba(15, 23, 42, 0.12);
-  display: flex; align-items: flex-start; justify-content: flex-start; padding: 4px 6px;
-  color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55); user-select: none;
+  position: absolute; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 6px;
+  cursor: grab; background: transparent; user-select: none;
 }
-.ad-handle.dragging, .ad-stage.on .ad-handle:hover { background: rgba(15, 23, 42, 0.28); border-color: #fff; cursor: grabbing; }
+.ad-handle span {
+  position: absolute; left: 0; top: -20px; padding: 2px 7px; border-radius: 4px;
+  background: rgba(15, 23, 42, 0.85); color: #fff; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; opacity: 0; pointer-events: none;
+  transition: opacity 0.12s;
+}
+.ad-handle:hover, .ad-handle.dragging { border-color: rgba(255, 255, 255, 0.95); box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45); }
+.ad-handle:hover span, .ad-handle.dragging span { opacity: 1; }
+.ad-handle.dragging { cursor: grabbing; }
 .text-toggle-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
 .vhead { display: flex; justify-content: space-between; font-size: 12px; color: var(--aurora-text3); margin-bottom: 8px; }
 .vhead strong { color: var(--aurora-text); }
