@@ -430,11 +430,17 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <button type="button" className="btn ghost sm" disabled={active.showSub !== false || active.sub.trim() === ''} onClick={() => patch({ showSub: true })}>Show on ad</button>
               </div>
               <label htmlFor="mCta">CTA button</label>
-              <input id="mCta" type="text" value={active.cta} onChange={(e) => patch({ cta: e.target.value, showCta: e.target.value.trim() !== '' })} />
-              <div className="text-toggle-row">
-                <button type="button" className="btn ghost sm" disabled={active.showCta === false} onClick={() => patch({ showCta: false })}>Remove from ad</button>
-                <button type="button" className="btn ghost sm" disabled={active.showCta !== false || active.cta.trim() === ''} onClick={() => patch({ showCta: true })}>Show on ad</button>
-              </div>
+              <input id="mCta" type="text" value={active.cta} onChange={(e) => patch({ cta: e.target.value })} />
+              <label className="show-toggle" htmlFor="showCta">
+                <input
+                  id="showCta"
+                  type="checkbox"
+                  checked={active.showCta !== false}
+                  onChange={(e) => patch({ showCta: e.target.checked })}
+                />
+                <span>Show CTA on the image</span>
+              </label>
+              <p className="hint">Turn this off and the button is left off the ad.</p>
               <label htmlFor="mPrimary">Primary text</label>
               <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
               <label htmlFor="mLayout">Layout</label>
