@@ -207,6 +207,7 @@ function streamGeneration(opts: {
           const name = String.fromCharCode(65 + index);
           emit(`Version ${name} is locked in.\nHeadline: ${draft.headline}\nSupporting line: ${draft.sub || '—'}\nPrimary text: ${draft.primary}`);
         });
+        emit(`Applying brand colors ${project.c1}, ${project.c2}, and ${project.c3} on the ${project.platform} · ${project.format} layout.`);
         emit('Nano Banana Pro at 4K is drawing each version.');
         const results = await Promise.all(opts.versions.map((version) => generateVersionImage({
           project,

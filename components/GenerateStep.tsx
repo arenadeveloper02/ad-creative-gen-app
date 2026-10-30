@@ -37,14 +37,26 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [moreText, setMoreText] = useState('1');
   const [zipNote, setZipNote] = useState<string | null>(null);
+  const [holdPanel, setHoldPanel] = useState(false);
+  const [localThoughts, setLocalThoughts] = useState('');
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
+  const thoughtText = [thoughts, localThoughts].filter(Boolean).join('\n\n');
 
   useEffect(() => {
     if (!project.versions.some((item) => item.id === activeId)) {
       setActiveId(project.versions[0]?.id ?? '');
     }
   }, [project.versions, activeId]);
+
+  // Keep the step list and thinking open until every preview image has settled on the canvas.
+  useEffect(() => {
+    if (!generating) return;
+    setHoldPanel(true);
+    setLocalThoughts('');
+    setLoadedUrls({});
+    imageCache.current = {};
+  }, [generating]);
 
   // Fal images are fetched once per URL with CORS so the canvas can export them.
   useEffect(() => {
@@ -67,6 +79,25 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
       if (canvas) drawAd(canvas, version, project.brandName, image);
     }
   }, [project.versions, project.brandName, loadedUrls]);
+
+  useEffect(() => {
+    if (!holdPanel || generating) return;
+    if (project.versions.length === 0) return;
+    const settled = project.versions.every((version) => {
+      if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] !== undefined;
+      return Boolean(version.imageError);
+    });
+    if (!settled) return;
+    setLocalThoughts('The previews are on the canvas. The ad is ready to review.');
+    setHoldPanel(false);
+  }, [holdPanel, generating, project.versions, loadedUrls]);
+
+  const showCreating = generating || holdPanel;
+  const imagesSettled = project.versions.length > 0 && project.versions.every((version) => {
+    if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] !== undefined;
+    return Boolean(version.imageError);
+  });
+  const progress = buildProgress(project, thoughtText, showCreating, imagesSettled && !showCreating);
 
   function patch(partial: Partial<VersionDTO>) {
     if (!active) return;
@@ -183,11 +214,9 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
         <p className="sub">Edit copy, colors, and layout. The preview updates live. Download when it looks right.</p>
         {error && <div className="err" role="alert">{error}</div>}
 
-        {generating && (
+        {showCreating && (
           <div className="preview-grid" aria-live="polite">
             <div>
-              <h4>Creating your ads…</h4>
-              <p className="hint">The approved copy is locked. Nano Banana Pro is drawing each picture.</p>
               <div className="versions">
                 {[0, 1].map((item) => (
                   <div key={item} className="vcard">
@@ -197,11 +226,25 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 ))}
               </div>
             </div>
-            <ThoughtChain text={thoughts} thinking />
+            <div>
+              <h4>Creating your ads…</h4>
+              <p className="hint">This takes a few seconds. Feel free to look away — we&apos;ll have it ready.</p>
+              {progress.steps.map((step) => (
+                <div key={step.title} className={`think-step ${step.state}`}>
+                  <span aria-hidden="true">{step.state === 'done' ? '✓' : step.state === 'run' ? '•' : '○'}</span>
+                  <span>
+                    {step.title}
+                    <span className="detail">{step.detail}</span>
+                  </span>
+                </div>
+              ))}
+              <div className="bar"><span style={{ width: `${progress.bar}%` }} /></div>
+              <ThoughtChain text={thoughtText} thinking />
+            </div>
           </div>
         )}
 
-        {!generating && active && (
+        {!showCreating && active && (
           <div className="preview-grid">
             <div>
               <div className="versions">
@@ -284,7 +327,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
             </div>
             <div>
-              {thoughts && <ThoughtChain text={thoughts} thinking={false} />}
+              {thoughtText && <ThoughtChain text={thoughtText} thinking={false} />}
               <h4>Modify version {letter(active.position)}</h4>
               <label htmlFor="mHeadline">Headline</label>
               <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value })} />
@@ -332,6 +375,37 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
       </div>
     </div>
   );
+}
+
+function buildProgress(project: ProjectDTO, thoughts: string, creating: boolean, finished: boolean): {
+  steps: { title: string; detail: string; state: 'wait' | 'run' | 'done' }[];
+  bar: number;
+} {
+  const tone = project.tone ? project.tone.toLowerCase() : 'professional';
+  const definitions = [
+    { title: 'Reading your brief', detail: 'Understanding your product and who it\'s for' },
+    { title: 'Analysing audience & goal', detail: 'Tailoring the message for your audience' },
+    { title: 'Writing headline & copy options', detail: `Matching a ${tone} tone` },
+    { title: 'Applying brand colors & layout', detail: `Composing for ${project.platform || 'the platform'} · ${project.format || 'the placement'}` },
+    { title: 'Rendering versions', detail: 'Building your ad previews' },
+  ];
+  const text = thoughts.toLowerCase();
+  let active = 0;
+  if (/audience:|goal:|tone:|platform:/.test(text)) active = 1;
+  if (/approved copy|copy stays|copy will be used|using the copy|locked in|headline:/.test(text)) active = 2;
+  if (/applying brand colors|brand colours|brand colors|composition:|image prompt/.test(text)) active = 3;
+  if (/nano banana|drawing each|\bfal\b|in queue|pictures are stored|previews are on the canvas/.test(text)) active = 4;
+  if (finished || !creating) active = definitions.length;
+  else if (text === '') active = 0;
+
+  const steps = definitions.map((item, index) => ({
+    ...item,
+    state: (index < active ? 'done' : index === active ? 'run' : 'wait') as 'wait' | 'run' | 'done',
+  }));
+  const bar = finished || active >= definitions.length
+    ? 100
+    : Math.min(95, 12 + active * 18 + (creating ? 8 : 0));
+  return { steps, bar };
 }
 
 function ThoughtChain({ text, thinking }: { text: string; thinking: boolean }) {
