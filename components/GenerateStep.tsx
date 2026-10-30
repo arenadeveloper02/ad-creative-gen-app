@@ -451,9 +451,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </select>
               <label htmlFor="mBg">Background</label>
               <select id="mBg" value={active.bg} onChange={(e) => patch({ bg: e.target.value as VersionDTO['bg'] })}>
-                <option value="gradient">Brand gradient</option>
-                <option value="solid">Solid brand</option>
-                <option value="light">Light / white</option>
+                <option value="photo">Photo — colour 1 button, colour 2 bar, colour 3 text</option>
+                <option value="gradient">Brand tint — colour 1 to colour 2 over the photo</option>
+                <option value="solid">Solid panel — colour 1 panel behind the text</option>
+                <option value="light">Light panel — white panel, colour 1 text</option>
               </select>
               <label>Colors</label>
               <div className="swatches">

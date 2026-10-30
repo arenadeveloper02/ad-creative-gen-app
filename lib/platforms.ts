@@ -46,7 +46,7 @@ export const SIZE_FOR: Record<string, string> = {
 export const SIZES = ['1080x1080', '1080x1350', '1080x1440', '1080x1920', '1200x628', '300x250'] as const;
 
 export const LAYOUTS = ['left', 'center', 'bottom'] as const;
-export const BACKGROUNDS = ['gradient', 'solid', 'light'] as const;
+export const BACKGROUNDS = ['photo', 'gradient', 'solid', 'light'] as const;
 export const COPY_SOURCES = ['ai', 'manual'] as const;
 export const ASSET_KINDS = ['guidelines', 'logos', 'fonts', 'refs'] as const;
 
