@@ -64,6 +64,7 @@ export function isAssetKind(value: unknown): value is AssetKind {
 
 export interface BriefInput {
   description: string;
+  sceneNote: string;
   goal: string;
   brandName: string;
   product: string;
@@ -77,6 +78,7 @@ export interface BriefInput {
 
 export function parseBrief(body: Record<string, unknown>): BriefInput | { error: string } {
   const description = cleanText(body.description, MAX_TEXT);
+  const sceneNote = cleanText(body.sceneNote, MAX_TEXT);
   const goal = oneOf(body.goal, GOALS, 'Awareness');
   const brandName = cleanText(body.brandName, MAX_NAME);
   const product = cleanText(body.product, MAX_NAME);
@@ -89,6 +91,7 @@ export function parseBrief(body: Record<string, unknown>): BriefInput | { error:
   const assetIds = Array.isArray(body.assetIds) ? body.assetIds.filter(isId).slice(0, 20) : [];
   return {
     description,
+    sceneNote,
     goal,
     brandName,
     product,

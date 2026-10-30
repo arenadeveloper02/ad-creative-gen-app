@@ -2,6 +2,7 @@ import type { Layout } from '@/lib/platforms';
 
 export interface ImagePromptInput {
   description: string;
+  sceneNote: string;
   goal: string;
   brandName: string;
   product: string;
@@ -57,11 +58,12 @@ export function buildImagePrompt(input: ImagePromptInput): string {
   const lines: string[] = [];
   lines.push(`Advertising image for ${product}${input.brandName ? ` by ${input.brandName}` : ''}.`);
   if (input.description) lines.push(`Brief: ${input.description}`);
+  if (input.sceneNote) lines.push(`Scene the user asked for: ${input.sceneNote}. This controls the setting, background, and lighting.`);
   lines.push(`Campaign goal: ${input.goal}. Platform: ${input.platform}, ${input.format} placement.`);
   if (input.audience) lines.push(`Audience: ${input.audience}.`);
   lines.push(`Visual style: ${STYLE_NOTES[input.visualStyle] ?? input.visualStyle}.`);
   lines.push(`Mood: ${TONE_NOTES[input.tone] ?? input.tone}.`);
-  lines.push(`Brand colours: primary ${input.c1}, secondary ${input.c2}, accent ${input.c3}; use them in the scene, props and lighting.`);
+  lines.push(`Brand colours ${input.c1}, ${input.c2}, and ${input.c3} may appear only as small accents. Do not tint the whole room, clothes, or background with them unless the scene note asks for that.`);
   lines.push(`Composition: ${LAYOUT_NOTES[input.layout]}. ${VARIANT_NOTES[input.variant % VARIANT_NOTES.length]}.`);
   if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives.');
   if (input.hasLogo) lines.push('The attached logo is the brand mark; place it small and legible, never distorted.');

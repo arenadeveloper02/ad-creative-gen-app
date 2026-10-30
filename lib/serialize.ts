@@ -44,6 +44,7 @@ export function serializeProject(row: AdProject & { assets: AssetRow[]; versions
     id: row.id,
     name: row.name,
     description: row.description,
+    sceneNote: row.sceneNote,
     goal: row.goal,
     brandName: row.brandName,
     product: row.product,

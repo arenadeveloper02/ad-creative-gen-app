@@ -31,6 +31,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       ownerEmail: email,
       name: name.slice(0, 120),
       description: brief.description,
+      sceneNote: brief.sceneNote,
       goal: brief.goal,
       brandName: brief.brandName,
       product: brief.product,

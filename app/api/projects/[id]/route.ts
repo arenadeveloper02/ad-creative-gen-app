@@ -34,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const brief = parseBrief({ ...loaded, ...body, assetIds: [] });
     if ('error' in brief) return NextResponse.json({ error: brief.error }, { status: 400 });
     data.description = brief.description;
+    data.sceneNote = brief.sceneNote;
     data.goal = brief.goal;
     data.brandName = brief.brandName;
     data.product = brief.product;

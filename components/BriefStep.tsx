@@ -14,6 +14,7 @@ const FIELDS: { key: AssetKind; title: string; sub: string; accept: string; prom
 
 export interface BriefPayload {
   description: string;
+  sceneNote: string;
   goal: string;
   brandName: string;
   product: string;
@@ -41,6 +42,7 @@ function fmtSize(bytes: number): string {
 
 export default function BriefStep({ project, profiles, saving, error, onContinue, onDraft, onProfiles }: BriefStepProps) {
   const [description, setDescription] = useState(project?.description ?? '');
+  const [sceneNote, setSceneNote] = useState(project?.sceneNote ?? '');
   const [goal, setGoal] = useState(project?.goal ?? 'Awareness');
   const [profileId, setProfileId] = useState(project?.profileId ?? '');
   const [brandName, setBrandName] = useState(project?.brandName ?? '');
@@ -124,11 +126,12 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     onDraftRef.current(draftPayload());
     // draftPayload reads the fields listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [description, goal, brandName, product, guidelineUrl, profileId, c1, c2, c3, assets]);
+  }, [description, sceneNote, goal, brandName, product, guidelineUrl, profileId, c1, c2, c3, assets]);
 
   function payload(ids: string[]): BriefPayload {
     return {
       description: description.trim(),
+      sceneNote: sceneNote.trim(),
       goal,
       brandName: brandName.trim(),
       product: product.trim(),
@@ -324,6 +327,9 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                   </div>
                 </div>
               </div>
+          <label htmlFor="sceneNote">Describe what you want</label>
+          <textarea id="sceneNote" value={sceneNote} onChange={(e) => setSceneNote(e.target.value)} placeholder="e.g. A bright white clinic, warm daylight, light wood desk. Do not make the room blue." />
+          <p className="hint">This sets the picture. The colour chips stay as small accents, not the whole background.</p>
           <label htmlFor="guidelineUrl">Guidelines link (optional)</label>
           <input id="guidelineUrl" type="url" value={guidelineUrl} onChange={(e) => setGuidelineUrl(e.target.value)} placeholder="https://brand.example.com" />
           {status && <p className={`status-line ${statusKind}`}>{status}</p>}

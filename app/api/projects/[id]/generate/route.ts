@@ -200,6 +200,7 @@ function streamGeneration(opts: {
           `Platform: ${project.platform}, ${project.format}.`,
         ].join('\n'));
         if (project.description.trim()) emit(`What was asked for:\n${project.description.trim().slice(0, 600)}`);
+        if (project.sceneNote.trim()) emit(`Scene the user asked for:\n${project.sceneNote.trim().slice(0, 600)}`);
         if (project.copyPrompt.trim()) emit(`Copy instruction:\n${project.copyPrompt.trim().slice(0, 600)}`);
         emit('The approved copy stays as written. The picture is drawn without those words, then the headline is painted on top.');
         drafts.forEach((draft, index) => {

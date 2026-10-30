@@ -49,6 +49,7 @@ export interface ProjectDTO {
   id: string;
   name: string;
   description: string;
+  sceneNote: string;
   goal: string;
   brandName: string;
   product: string;

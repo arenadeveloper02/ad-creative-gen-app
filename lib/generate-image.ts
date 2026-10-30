@@ -108,6 +108,7 @@ export async function generateVersionImage(opts: {
     : `${label}: no logo or reference image on this ad, so the brief carries the look.`);
   const prompt = buildImagePrompt({
     description: project.description,
+    sceneNote: project.sceneNote,
     goal: project.goal,
     brandName: project.brandName,
     product: project.product,

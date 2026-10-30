@@ -21,6 +21,7 @@ model AdProject {
   ownerEmail   String
   name         String   @default("Untitled ad")
   description  String   @default("")
+  sceneNote    String   @default("")
   goal         String   @default("Awareness")
   brandName    String   @default("")
   product      String   @default("")

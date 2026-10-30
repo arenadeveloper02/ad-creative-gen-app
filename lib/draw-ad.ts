@@ -45,15 +45,15 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
 
   if (hasImage) {
     coverImage(ctx, image, width, height);
-    // Scrim in the brand colour so the copy stays legible over the photo.
-    const [r, g, b] = hexToRgb(version.bg === 'light' ? '#FFFFFF' : version.c1);
+    // Neutral shade so the headline stays readable without recolouring the photo.
+    const [r, g, b] = [12, 16, 28];
     const scrim = version.layout === 'bottom'
       ? ctx.createLinearGradient(0, height * 0.45, 0, height)
       : version.layout === 'center'
         ? ctx.createRadialGradient(width / 2, height / 2, width * 0.1, width / 2, height / 2, width * 0.7)
         : ctx.createLinearGradient(0, 0, width, 0);
-    scrim.addColorStop(0, `rgba(${r},${g},${b},${version.layout === 'bottom' ? 0 : 0.78})`);
-    scrim.addColorStop(1, `rgba(${r},${g},${b},${version.layout === 'bottom' ? 0.88 : version.layout === 'center' ? 0.15 : 0.05})`);
+    scrim.addColorStop(0, `rgba(${r},${g},${b},${version.layout === 'bottom' ? 0 : 0.42})`);
+    scrim.addColorStop(1, `rgba(${r},${g},${b},${version.layout === 'bottom' ? 0.55 : version.layout === 'center' ? 0.12 : 0.05})`);
     ctx.fillStyle = scrim;
     ctx.fillRect(0, 0, width, height);
   } else {

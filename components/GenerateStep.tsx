@@ -184,17 +184,20 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
         {error && <div className="err" role="alert">{error}</div>}
 
         {generating && (
-          <div aria-live="polite">
-            <h4>Creating your ads…</h4>
-            <p className="hint">The approved copy is locked. Nano Banana Pro is drawing each picture. The chain of thought below follows the work.</p>
-            <div className="versions">
-              {[0, 1].map((item) => (
-                <div key={item} className="vcard">
-                  <div className="vhead"><strong>Version {letter(item)}</strong></div>
-                  <div className="sk" style={{ height: 180, background: 'var(--aurora-inset)' }} />
-                </div>
-              ))}
+          <div className="preview-grid" aria-live="polite">
+            <div>
+              <h4>Creating your ads…</h4>
+              <p className="hint">The approved copy is locked. Nano Banana Pro is drawing each picture.</p>
+              <div className="versions">
+                {[0, 1].map((item) => (
+                  <div key={item} className="vcard">
+                    <div className="vhead"><strong>Version {letter(item)}</strong></div>
+                    <div className="sk" style={{ height: 180, background: 'var(--aurora-inset)' }} />
+                  </div>
+                ))}
+              </div>
             </div>
+            <ThoughtChain text={thoughts} thinking />
           </div>
         )}
 
@@ -281,6 +284,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
             </div>
             <div>
+              {thoughts && <ThoughtChain text={thoughts} thinking={false} />}
               <h4>Modify version {letter(active.position)}</h4>
               <label htmlFor="mHeadline">Headline</label>
               <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value })} />
@@ -325,7 +329,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
             </div>
           </div>
         )}
-        {(generating || thoughts) && <ThoughtChain text={thoughts} thinking={generating} />}
       </div>
     </div>
   );
