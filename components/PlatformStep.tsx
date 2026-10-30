@@ -18,6 +18,7 @@ export interface PlatformPayload {
   avoid: string;
   copyPrompt: string;
   imageModel: ImageModel;
+  approvedCopy?: { headline: string; sub: string; primary: string }[];
 }
 
 interface PlatformStepProps {
@@ -27,9 +28,10 @@ interface PlatformStepProps {
   onBack: () => void;
   onGenerate: (data: PlatformPayload) => void;
   onDraft: (data: PlatformPayload) => void;
+  onPreview: (data: PlatformPayload) => Promise<{ ok: true; versions: { headline: string; sub: string; primary: string }[] } | { ok: false; error: string }>;
 }
 
-export default function PlatformStep({ project, saving, error, onBack, onGenerate, onDraft }: PlatformStepProps) {
+export default function PlatformStep({ project, saving, error, onBack, onGenerate, onDraft, onPreview }: PlatformStepProps) {
   const [platform, setPlatform] = useState(project.platform);
   const formats = PLATFORMS[platform] ?? PLATFORMS['Meta (Facebook/Instagram)'];
   const [format, setFormat] = useState(formats.includes(project.format) ? project.format : formats[0]);
@@ -43,6 +45,11 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const [avoid, setAvoid] = useState(project.avoid);
   const [copyPrompt, setCopyPrompt] = useState(project.copyPrompt);
   const imageModel: ImageModel = 'nano-banana-pro';
+  const [preview, setPreview] = useState<{ headline: string; sub: string; primary: string }[] | null>(null);
+  const [approved, setApproved] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const skipClear = useRef(true);
 
   function currentPayload(): PlatformPayload {
     return { platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel };
@@ -55,6 +62,28 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
     // currentPayload reads the fields listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel]);
+
+  useEffect(() => {
+    if (skipClear.current) {
+      skipClear.current = false;
+      return;
+    }
+    setPreview(null);
+    setApproved(false);
+  }, [copyPrompt, avoid, audience, tone, cta, platform, format, copySource]);
+
+  async function writeCopy() {
+    setWriting(true);
+    setWriteError(null);
+    setApproved(false);
+    const result = await onPreview(currentPayload());
+    setWriting(false);
+    if (!result.ok) {
+      setWriteError(result.error);
+      return;
+    }
+    setPreview(result.versions);
+  }
 
   function pickPlatform(next: string) {
     setPlatform(next);
@@ -129,7 +158,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
         </div>
         <p className="hint">
           {copySource === 'ai'
-            ? 'Type what the ad should say. Gemini writes a headline, supporting line, and primary text for each version.'
+            ? 'Type what the ad should say, then write a preview. Generate ad stays off until you approve that copy.'
             : 'Write your own headline and supporting line. A blank field is filled on the server.'}
         </p>
         {copySource === 'ai' && (
@@ -141,6 +170,28 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
               onChange={(e) => setCopyPrompt(e.target.value)}
               placeholder="e.g. Get marketing leaders to book a 15-minute demo this week. Sound professional. Do not name competitors."
             />
+            <div className="footer" style={{ justifyContent: 'flex-start' }}>
+              <button type="button" className="btn ghost sm" disabled={writing || saving} onClick={() => void writeCopy()}>
+                {writing ? 'Writing…' : preview ? 'Write again' : 'Write the copy'}
+              </button>
+              <button type="button" className="btn sm" disabled={!preview || writing || approved} onClick={() => setApproved(true)}>
+                {approved ? 'Copy approved' : 'Use this copy'}
+              </button>
+            </div>
+            {writeError && <div className="err" role="alert">{writeError}</div>}
+            {preview && (
+              <div className="copy-preview">
+                {preview.map((line, index) => (
+                  <article key={`${line.headline}-${index}`} className={approved ? 'on' : ''}>
+                    <strong>Version {String.fromCharCode(65 + index)}</strong>
+                    <p>{line.headline}</p>
+                    <p className="hint">{line.sub}</p>
+                    <p>{line.primary}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+            {approved && <p className="hint">This copy is approved. Generate ad will use these lines and will not write new ones.</p>}
           </>
         )}
         {copySource === 'manual' && (
@@ -163,8 +214,8 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
           <button
             type="button"
             className="btn"
-            disabled={saving}
-            onClick={() => onGenerate(currentPayload())}
+            disabled={saving || writing || (copySource === 'ai' && !approved)}
+            onClick={() => onGenerate({ ...currentPayload(), approvedCopy: copySource === 'ai' && preview ? preview : undefined })}
           >
             {saving ? 'Generating…' : 'Generate ad'}
           </button>

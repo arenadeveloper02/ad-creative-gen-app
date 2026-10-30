@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
 import { draftVersion, type CopyInput, type VersionDraft } from '@/lib/copy';
+import type { WrittenLine } from '@/lib/write-copy';
 import { falConfigError } from '@/lib/fal';
 import { generateVersionImage } from '@/lib/generate-image';
 import { writeAdCopy } from '@/lib/write-copy';
@@ -18,7 +19,7 @@ const projectWithAssets = {
   assets: { select: { id: true, kind: true, mimeType: true } },
 };
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const email = await currentOwnerEmail();
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
@@ -117,9 +118,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } else {
     const cfg = falConfigError();
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
-    const resolved = await resolveDrafts(2, 0);
-    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
-    const drafts = resolved.drafts;
+    let drafts: VersionDraft[];
+    if (input.copySource === 'ai') {
+      const approved = readApprovedCopy(body);
+      if (!approved) return NextResponse.json({ error: 'Approve the copy before generating the ad.' }, { status: 400 });
+      drafts = approved.map((line, index) => ({
+        ...draftVersion(input, index, owned.format),
+        headline: line.headline,
+        sub: line.sub,
+        primary: line.primary,
+      }));
+    } else {
+      const resolved = await resolveDrafts(2, 0);
+      if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
+      drafts = resolved.drafts;
+    }
     const created = await prisma.$transaction(async (tx) => {
       await tx.adVersion.deleteMany({ where: { projectId: project.id } });
       const rows = [];
@@ -129,6 +142,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await tx.adProject.update({ where: { id: project.id }, data: { step: 3, status: 'generated' } });
       return rows;
     });
+    if (body.stream === true) {
+      return streamGeneration({
+        drafts,
+        versions: created,
+        project,
+        ownerEmail: email,
+      });
+    }
     const results = await Promise.all(created.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
     const failed = results.find((r) => !r.ok);
     if (failed && results.every((r) => !r.ok)) {
@@ -139,4 +160,80 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const full = await prisma.adProject.findFirst({ where: { id: project.id, ownerEmail: email }, include: projectInclude });
   if (!full) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
   return NextResponse.json(serializeProject(full));
+}
+
+function readApprovedCopy(body: Record<string, unknown>): WrittenLine[] | null {
+  if (!Array.isArray(body.approvedCopy)) return null;
+  const lines: WrittenLine[] = [];
+  for (const item of body.approvedCopy.slice(0, 2)) {
+    if (!isRecord(item)) continue;
+    const headline = cleanText(item.headline, 200);
+    const sub = cleanText(item.sub, 200);
+    const primary = cleanText(item.primary, 4000);
+    if (headline && primary) lines.push({ headline, sub, primary });
+  }
+  return lines.length > 0 ? lines : null;
+}
+
+function streamGeneration(opts: {
+  drafts: VersionDraft[];
+  versions: { id: string; position: number; layout: string; size: string; c1: string; c2: string; c3: string; imageUrl: string | null }[];
+  project: Parameters<typeof generateVersionImage>[0]['project'];
+  ownerEmail: string;
+}): Response {
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      const emit = (text: string) => send({ type: 'thought', text });
+      try {
+        const { project, drafts } = opts;
+        emit(`Reading the brief for ${project.product || project.brandName || 'this ad'}.`);
+        emit([
+          `Brand: ${project.brandName || 'not named'}.`,
+          `Product: ${project.product || 'not named'}.`,
+          `Goal: ${project.goal}.`,
+          `Audience: ${project.audience || 'not set'}.`,
+          `Tone: ${project.tone}. Visual style: ${project.visualStyle}.`,
+          `Platform: ${project.platform}, ${project.format}.`,
+        ].join('\n'));
+        if (project.description.trim()) emit(`What was asked for:\n${project.description.trim().slice(0, 600)}`);
+        if (project.copyPrompt.trim()) emit(`Copy instruction:\n${project.copyPrompt.trim().slice(0, 600)}`);
+        emit('The approved copy stays as written. The picture is drawn without those words, then the headline is painted on top.');
+        drafts.forEach((draft, index) => {
+          const name = String.fromCharCode(65 + index);
+          emit(`Version ${name} is locked in.\nHeadline: ${draft.headline}\nSupporting line: ${draft.sub || '—'}\nPrimary text: ${draft.primary}`);
+        });
+        emit('Nano Banana Pro at 4K is drawing each version.');
+        const results = await Promise.all(opts.versions.map((version) => generateVersionImage({
+          project,
+          version,
+          ownerEmail: opts.ownerEmail,
+          onThought: emit,
+        })));
+        const failed = results.find((item) => !item.ok);
+        const full = await prisma.adProject.findFirst({ where: { id: project.id, ownerEmail: opts.ownerEmail }, include: projectInclude });
+        if (!full) {
+          send({ type: 'error', error: 'Project not found.' });
+          return;
+        }
+        if (failed && results.every((item) => !item.ok)) send({ type: 'error', error: failed.error ?? 'Image generation failed.' });
+        else emit('The pictures are stored. The ad is ready to review.');
+        send({ type: 'project', project: serializeProject(full) });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Image generation failed.';
+        send({ type: 'error', error: message });
+      } finally {
+        controller.close();
+      }
+    },
+  }), {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }

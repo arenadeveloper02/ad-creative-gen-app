@@ -11,8 +11,7 @@ interface GenerateStepProps {
   project: ProjectDTO;
   generating: boolean;
   busy: boolean;
-  think: { title: string; detail: string; state: 'wait' | 'run' | 'done' }[];
-  bar: number;
+  thoughts: string;
   error: string | null;
   onBack: () => void;
   onPatch: (version: VersionDTO) => void;
@@ -30,7 +29,7 @@ function isHttpsUrl(value: string | null): value is string {
   return typeof value === 'string' && /^https:\/\//i.test(value);
 }
 
-export default function GenerateStep({ project, generating, busy, think, bar, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, thoughts, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
@@ -185,7 +184,9 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
         {error && <div className="err" role="alert">{error}</div>}
 
         {generating && (
-          <div className="gen-layout" aria-live="polite">
+          <div aria-live="polite">
+            <h4>Creating your ads…</h4>
+            <p className="hint">The approved copy is locked. Nano Banana Pro is drawing each picture. The chain of thought below follows the work.</p>
             <div className="versions">
               {[0, 1].map((item) => (
                 <div key={item} className="vcard">
@@ -193,20 +194,6 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
                   <div className="sk" style={{ height: 180, background: 'var(--aurora-inset)' }} />
                 </div>
               ))}
-            </div>
-            <div>
-              <h4>Creating your ads…</h4>
-              <p className="hint">Gemini writes the words from your copy prompt, then fal.ai renders each image. This can take up to a minute.</p>
-              {think.map((step) => (
-                <div key={step.title} className={`think-step ${step.state}`}>
-                  <span>{step.state === 'done' ? '✓' : step.state === 'run' ? '•' : '○'}</span>
-                  <span>
-                    {step.title}
-                    <span className="detail">{step.detail}</span>
-                  </span>
-                </div>
-              ))}
-              <div className="bar"><span style={{ width: `${bar}%` }} /></div>
             </div>
           </div>
         )}
@@ -338,7 +325,39 @@ export default function GenerateStep({ project, generating, busy, think, bar, er
             </div>
           </div>
         )}
+        {(generating || thoughts) && <ThoughtChain text={thoughts} thinking={generating} />}
       </div>
+    </div>
+  );
+}
+
+function ThoughtChain({ text, thinking }: { text: string; thinking: boolean }) {
+  const [open, setOpen] = useState(thinking);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (thinking) setOpen(true);
+  }, [thinking, text]);
+
+  useEffect(() => {
+    if (!thinking) setOpen(false);
+  }, [thinking]);
+
+  useEffect(() => {
+    const node = bodyRef.current;
+    if (node && open && thinking) node.scrollTop = node.scrollHeight;
+  }, [text, open, thinking]);
+
+  return (
+    <div className="thought-chain">
+      <button type="button" className="thought-toggle" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        <span className={thinking ? 'thought-label run' : 'thought-label'}>{thinking ? 'Thinking…' : 'Thoughts'}</span>
+      </button>
+      {open && (
+        <div ref={bodyRef} className="thought-body">
+          {text || 'Starting…'}
+        </div>
+      )}
     </div>
   );
 }

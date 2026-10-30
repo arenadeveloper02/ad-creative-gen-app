@@ -19,6 +19,37 @@ function isProject(value: unknown): value is ProjectDTO {
   return typeof value === 'object' && value !== null && 'id' in value && 'versions' in value;
 }
 
+function isRecordVersions(value: unknown): { headline: string; sub: string; primary: string }[] | null {
+  if (typeof value !== 'object' || value === null || !('versions' in value)) return null;
+  const versions = (value as { versions: unknown }).versions;
+  if (!Array.isArray(versions) || versions.length === 0) return null;
+  const lines: { headline: string; sub: string; primary: string }[] = [];
+  for (const item of versions) {
+    if (typeof item !== 'object' || item === null) return null;
+    const row = item as { headline?: unknown; sub?: unknown; primary?: unknown };
+    if (typeof row.headline !== 'string' || typeof row.primary !== 'string') return null;
+    lines.push({ headline: row.headline, sub: typeof row.sub === 'string' ? row.sub : '', primary: row.primary });
+  }
+  return lines;
+}
+
+function readThoughtEvent(line: string): { type: 'thought'; text: string } | { type: 'error'; error: string } | { type: 'project'; project: ProjectDTO } | null {
+  const trimmed = line.trim();
+  if (trimmed === '') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const event = parsed as { type?: unknown; text?: unknown; error?: unknown; project?: unknown };
+  if (event.type === 'thought' && typeof event.text === 'string') return { type: 'thought', text: event.text };
+  if (event.type === 'error' && typeof event.error === 'string') return { type: 'error', error: event.error };
+  if (event.type === 'project' && isProject(event.project)) return { type: 'project', project: event.project };
+  return null;
+}
+
 export default function WizardClient({ initialProject, profiles: initialProfiles }: WizardClientProps) {
   const router = useRouter();
   const [project, setProject] = useState<ProjectDTO | null>(initialProject);
@@ -26,8 +57,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   const [step, setStep] = useState(initialProject ? Math.min(Math.max(initialProject.step, 1), 3) : 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [think, setThink] = useState<{ title: string; detail: string; state: 'wait' | 'run' | 'done' }[]>([]);
-  const [bar, setBar] = useState(0);
+  const [thoughts, setThoughts] = useState('');
   const saveTimer = useRef<number | null>(null);
   const draftTimer = useRef<number | null>(null);
   const platformTimer = useRef<number | null>(null);
@@ -141,22 +171,47 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     }
   }
 
+  function appendThought(text: string) {
+    setThoughts((current) => (current ? `${current}\n\n${text}` : text));
+  }
+
+  async function previewCopy(data: PlatformPayload) {
+    if (!project) return { ok: false as const, error: 'Save the brief first.' };
+    if (platformTimer.current) window.clearTimeout(platformTimer.current);
+    pendingPlatform.current = null;
+    const saved = await fetch(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const savedParsed = await readJson(saved);
+    if (!savedParsed.ok) return { ok: false as const, error: savedParsed.error };
+    if (isProject(savedParsed.data)) {
+      projectRef.current = savedParsed.data;
+      setProject(savedParsed.data);
+    }
+    const written = await fetch(`/api/projects/${project.id}/copy`, { method: 'POST' });
+    const parsed = await readJson(written);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
+    const versions = isRecordVersions(parsed.data);
+    if (!versions) return { ok: false as const, error: 'The copy model returned nothing usable. Try again.' };
+    return { ok: true as const, versions };
+  }
+
   async function generate(data: PlatformPayload) {
     if (!project) return;
+    if (data.copySource === 'ai' && (!data.approvedCopy || data.approvedCopy.length === 0)) {
+      setError('Approve the copy before generating the ad.');
+      return;
+    }
     if (platformTimer.current) window.clearTimeout(platformTimer.current);
     pendingPlatform.current = null;
     applyEpoch.current += 1;
     setSaving(true);
     setError(null);
+    setThoughts('');
     setStep(3);
-    const steps = [
-      { title: 'Reading your brief', detail: `Understanding ${project.product || project.brandName || 'the product'}`, state: 'wait' as const },
-      { title: 'Checking platform and audience', detail: data.platform, state: 'wait' as const },
-      { title: 'Writing the versions', detail: data.copySource === 'ai' ? 'Gemini is writing the headline and primary text' : 'Using the copy you wrote', state: 'wait' as const },
-      { title: 'Rendering images on fal.ai', detail: 'Nano Banana Pro at 4K · one image per version', state: 'wait' as const },
-    ];
-    setThink(steps);
-    setBar(15);
+    appendThought('Saving the platform choices.');
     const saved = await fetch(`/api/projects/${project.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -169,29 +224,60 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       setStep(2);
       return;
     }
-    setThink((current) => current.map((item, index) => ({ ...item, state: index < 2 ? 'done' : index === 2 ? 'run' : 'wait' })));
-    setBar(45);
-    const tick = window.setTimeout(() => {
-      setThink((current) => current.map((item, index) => ({ ...item, state: index < 3 ? 'done' : 'run' })));
-      setBar(70);
-    }, 1500);
+    appendThought(data.copySource === 'ai' ? 'Platform saved. The approved copy will be used as written.' : 'Platform saved. Using the copy you wrote.');
     const generated = await fetch(`/api/projects/${project.id}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'replace' }),
+      body: JSON.stringify({ mode: 'replace', stream: true, approvedCopy: data.approvedCopy }),
     });
-    const parsed = await readJson(generated);
-    window.clearTimeout(tick);
-    setSaving(false);
-    setBar(100);
-    setThink((current) => current.map((item) => ({ ...item, state: 'done' })));
-    if (!parsed.ok || !isProject(parsed.data)) {
+    const type = generated.headers.get('content-type') ?? '';
+    if (type.includes('application/json')) {
+      const parsed = await readJson(generated);
+      setSaving(false);
       setError(parsed.ok ? 'Could not generate the ad.' : parsed.error);
+      setStep(2);
       return;
     }
+    const body = generated.body;
+    if (!body) {
+      setSaving(false);
+      setError('Could not generate the ad.');
+      setStep(2);
+      return;
+    }
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let nextProject: ProjectDTO | null = null;
+    let streamError: string | null = null;
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const event = readThoughtEvent(line);
+        if (!event) continue;
+        if (event.type === 'thought') appendThought(event.text);
+        if (event.type === 'error') streamError = event.error;
+        if (event.type === 'project') nextProject = event.project;
+      }
+    }
+    const tail = readThoughtEvent(buffer);
+    if (tail?.type === 'thought') appendThought(tail.text);
+    if (tail?.type === 'error') streamError = tail.error;
+    if (tail?.type === 'project') nextProject = tail.project;
+    setSaving(false);
+    if (!nextProject) {
+      setError(streamError ?? 'Could not generate the ad.');
+      setStep(2);
+      return;
+    }
+    if (streamError) setError(streamError);
     reachedRef.current = Math.max(reachedRef.current, 3);
-    projectRef.current = parsed.data;
-    setProject(parsed.data);
+    projectRef.current = nextProject;
+    setProject(nextProject);
   }
 
   function queuePatch(version: VersionDTO) {
@@ -237,15 +323,14 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
         <BriefStep project={project} profiles={profiles} saving={saving} error={error} onContinue={(data) => void saveBrief(data)} onDraft={queueBrief} onProfiles={setProfiles} />
       )}
       {step === 2 && project && (
-        <PlatformStep project={project} saving={saving} error={error} onBack={() => goto(1)} onGenerate={(data) => void generate(data)} onDraft={queuePlatform} />
+        <PlatformStep project={project} saving={saving} error={error} onBack={() => goto(1)} onGenerate={(data) => void generate(data)} onDraft={queuePlatform} onPreview={previewCopy} />
       )}
       {step === 3 && project && (
         <GenerateStep
           project={project}
           generating={saving}
           busy={busy}
-          think={think}
-          bar={bar}
+          thoughts={thoughts}
           error={error}
           onBack={() => goto(2)}
           onPatch={queuePatch}

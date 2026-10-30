@@ -88,8 +88,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Submit and poll until done. Image jobs finish within the timeout. */
-export async function runFalJob(endpoint: string, input: Record<string, unknown>, timeoutMs = 90000): Promise<FalRunResult> {
+function withLogs(url: string): string {
+  if (url.includes('logs=1')) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}logs=1`;
+}
+
+function freshLogs(body: unknown, seen: Set<string>): string[] {
+  if (!isRecord(body) || !Array.isArray(body.logs)) return [];
+  const next: string[] = [];
+  for (const log of body.logs) {
+    const message = isRecord(log) && typeof log.message === 'string' ? log.message.trim().slice(0, 500) : '';
+    if (message === '' || seen.has(message)) continue;
+    seen.add(message);
+    next.push(message);
+  }
+  return next;
+}
+
+/** Submit and poll until done. Image jobs finish within the timeout. `onUpdate` receives each new queue status and Fal log line. */
+export async function runFalJob(
+  endpoint: string,
+  input: Record<string, unknown>,
+  timeoutMs = 90000,
+  onUpdate?: (update: { status: string; logs: string[] }) => void,
+): Promise<FalRunResult> {
   const cfg = falConfigError();
   if (cfg) return { ok: false, output: null, requestId: null, endpointId: endpoint, error: cfg };
   try {
@@ -99,10 +121,12 @@ export async function runFalJob(endpoint: string, input: Record<string, unknown>
     }
     const requestId = readString(submit.body, ['request_id']);
     const root = endpoint.split('/').slice(0, 2).join('/');
-    const statusUrl = readString(submit.body, ['status_url']) ?? `${QUEUE_BASE}/${root}/requests/${encodeURIComponent(requestId ?? '')}/status`;
+    const statusUrl = withLogs(readString(submit.body, ['status_url']) ?? `${QUEUE_BASE}/${root}/requests/${encodeURIComponent(requestId ?? '')}/status`);
     if (!requestId) return { ok: false, output: null, requestId: null, endpointId: endpoint, error: `Fal ${endpoint} returned no request id.` };
 
     const deadline = Date.now() + timeoutMs;
+    const seenLogs = new Set<string>();
+    let lastStatus = '';
     let wait = 1000;
     while (Date.now() < deadline) {
       await sleep(wait);
@@ -113,6 +137,11 @@ export async function runFalJob(endpoint: string, input: Record<string, unknown>
         return { ok: false, output: null, requestId, endpointId: endpoint, error: describeFalError(state.status, state.body, endpoint) };
       }
       const status = (readString(state.body, ['status']) ?? '').toUpperCase();
+      const logs = freshLogs(state.body, seenLogs);
+      if (onUpdate && (status !== lastStatus || logs.length > 0)) {
+        lastStatus = status;
+        onUpdate({ status, logs });
+      }
       if (status === 'IN_QUEUE' || status === 'IN_PROGRESS') continue;
       if (status === 'FAILED' || status === 'CANCELED' || status === 'CANCELLED') {
         return { ok: false, output: state.body, requestId, endpointId: endpoint, error: `Fal reported ${endpoint} as ${status.toLowerCase()}.` };

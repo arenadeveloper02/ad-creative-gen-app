@@ -28,6 +28,28 @@
 .vactions button:disabled { color: var(--aurora-text3); cursor: default; }
 .more-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 18px; }
 .more-row input[type='text'] { width: 160px; }
+.copy-preview { display: grid; gap: 12px; margin-top: 8px; }
+.copy-preview article { border: 1px solid var(--aurora-line); padding: 14px 16px; background: var(--aurora-panel); }
+.copy-preview article.on { border-color: var(--aurora-c1); }
+.copy-preview strong { display: block; margin-bottom: 6px; }
+.copy-preview p { margin: 0 0 6px; }
+.thought-chain { margin-top: 22px; }
+.thought-toggle { background: none; border: 0; padding: 0; cursor: pointer; color: var(--aurora-text3); font: inherit; }
+.thought-label { font-size: 14px; }
+.thought-label.run {
+  background: linear-gradient(90deg, var(--aurora-text3), var(--aurora-text), var(--aurora-text3));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thought-shimmer 1.4s linear infinite;
+}
+.thought-body {
+  max-height: 240px; overflow-y: auto; margin-top: 8px; padding-left: 12px;
+  border-left: 1px solid var(--aurora-line); white-space: pre-wrap; word-break: break-word;
+  font-size: 13px; line-height: 1.6; color: var(--aurora-text2);
+}
+@keyframes thought-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 .gen-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
 .think-step { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--aurora-text3); padding: 6px 0; }
 .think-step.run { color: var(--aurora-text); font-weight: 600; }

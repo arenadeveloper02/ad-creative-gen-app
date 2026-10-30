@@ -3,12 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { falKey, runFalJob } from '@/lib/fal';
 import { buildImageJob, readImageUrl } from '@/lib/fal-models';
 import { buildImagePrompt } from '@/lib/image-prompt';
+import { isRecord } from '@/lib/json';
 import { logUsage, reportFalUsage } from '@/lib/usage';
 import type { Layout } from '@/lib/platforms';
 
 type AssetMeta = Pick<AdAsset, 'id' | 'kind' | 'mimeType'>;
 
 const REF_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+function clipNote(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 700) : '';
+}
 
 /** Brand files live in Postgres; Fal needs a public URL, so each is uploaded to Fal storage once per generation. */
 async function uploadAssetToFal(assetId: string): Promise<string | null> {
@@ -53,8 +58,11 @@ export async function generateVersionImage(opts: {
   version: Pick<AdVersion, 'id' | 'position' | 'layout' | 'size' | 'c1' | 'c2' | 'c3' | 'imageUrl'>;
   ownerEmail: string;
   editPrompt?: string;
+  onThought?: (text: string) => void;
 }): Promise<GenerateImageResult> {
   const { project, version } = opts;
+  const note = opts.onThought ?? (() => undefined);
+  const label = `Version ${String.fromCharCode(65 + version.position)}`;
   const change = opts.editPrompt?.trim() ?? '';
   if (change !== '') {
     if (!version.imageUrl || !/^https:\/\//i.test(version.imageUrl)) {
@@ -66,8 +74,12 @@ export async function generateVersionImage(opts: {
       'Keep the same people, product, logo, colours, and framing.',
       'Do not add any words, letters, captions, or watermarks.',
     ].join('\n');
+    note(`${label}: editing this image only. ${change}`);
     const job = buildImageJob({ prompt, size: version.size, model: 'nano-banana-pro', referenceImageUrls: [version.imageUrl] });
-    const run = await runFalJob(job.endpoint, job.input, 180000);
+    const run = await runFalJob(job.endpoint, job.input, 180000, (update) => {
+      if (update.logs.length > 0) note(`${label}: ${update.logs.join(' ')}`);
+      else if (update.status) note(`${label}: Fal is ${update.status.toLowerCase().replace(/_/g, ' ')}.`);
+    });
     const imageUrl = run.ok ? readImageUrl(run.output) : null;
     const error = run.ok ? (imageUrl ? null : 'Fal returned no image.') : (run.error ?? 'Image generation failed.');
     await prisma.adVersion.update({
@@ -89,7 +101,11 @@ export async function generateVersionImage(opts: {
   }
 
   const model = 'nano-banana-pro' as const;
+  note(`${label}: checking the logo and reference files.`);
   const refs = await referenceUrls(project.assets);
+  note(refs.urls.length > 0
+    ? `${label}: ${refs.urls.length} brand file${refs.urls.length === 1 ? '' : 's'} uploaded for the model to see.`
+    : `${label}: no logo or reference image on this ad, so the brief carries the look.`);
   const prompt = buildImagePrompt({
     description: project.description,
     goal: project.goal,
@@ -110,10 +126,17 @@ export async function generateVersionImage(opts: {
     variant: version.position,
   });
 
+  note(`${label}: sending this prompt to Nano Banana Pro at 4K.\n${prompt}`);
   const job = buildImageJob({ prompt, size: version.size, model, referenceImageUrls: refs.urls });
-  const run = await runFalJob(job.endpoint, job.input, 180000);
+  const run = await runFalJob(job.endpoint, job.input, 180000, (update) => {
+    if (update.logs.length > 0) note(`${label}: ${update.logs.join(' ')}`);
+    else if (update.status) note(`${label}: Fal is ${update.status.toLowerCase().replace(/_/g, ' ')}.`);
+  });
   const imageUrl = run.ok ? readImageUrl(run.output) : null;
   const error = run.ok ? (imageUrl ? null : 'Fal returned no image.') : (run.error ?? 'Image generation failed.');
+  const described = run.ok && isRecord(run.output) ? clipNote(run.output.description) : '';
+  if (described) note(`${label}: the model said — ${described}`);
+  note(imageUrl ? `${label}: the picture is ready.` : `${label}: the picture failed. ${error ?? ''}`);
 
   await prisma.adVersion.update({
     where: { id: version.id },
