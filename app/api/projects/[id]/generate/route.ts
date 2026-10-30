@@ -78,6 +78,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const version = project.versions.find((item) => item.id === body.versionId);
     if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
     const editPrompt = cleanText(body.editPrompt, 1000);
+    if (body.stream === true) {
+      return streamGeneration({
+        intro: `Updating the picture on Version ${String.fromCharCode(65 + version.position)}.${editPrompt ? `\nChange asked for: ${editPrompt}` : ''}`,
+        versions: [version],
+        project,
+        ownerEmail: email,
+        editPrompt,
+      });
+    }
     const result = await generateVersionImage({ project, version, ownerEmail: email, editPrompt });
     if (!result.ok) return NextResponse.json({ error: result.error ?? 'Image generation failed.' }, { status: 502 });
   } else if (mode === 'refresh') {
@@ -85,6 +94,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
     const keep = project.versions.filter((item) => item.position < 2);
     if (keep.length === 0) return NextResponse.json({ error: 'Generate the ad before refreshing the images.' }, { status: 400 });
+    if (body.stream === true) {
+      return streamGeneration({
+        intro: 'Redrawing the pictures on Version A and B. The copy, colours, and layout stay as they are.',
+        versions: keep,
+        project,
+        ownerEmail: email,
+      });
+    }
     const results = await Promise.all(keep.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
     const failed = results.find((item) => !item.ok);
     if (failed && results.every((item) => !item.ok)) {
@@ -104,7 +121,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const taken = project.versions.map((item) => item.headline).filter((item) => item.trim() !== '');
     const resolved = await resolveDrafts(asked, project.versions.length, taken.length > 0 ? taken.join('; ') : undefined);
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
-    // Lock size, colours, and background to Version A so extras stay the same format and quality level.
+    // Extras copy Version A exactly: size, template, layout, text colours, text placement, and which lines show.
+    // Only the copy and the picture angle change, so the set reads as one campaign.
     const lead = project.versions[0];
     const created = [];
     for (const [index, draft] of resolved.drafts.entries()) {
@@ -115,15 +133,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           headline: draft.headline,
           sub: draft.sub,
           primary: draft.primary,
-          cta: draft.cta,
-          layout: draft.layout,
+          cta: lead?.cta ?? draft.cta,
+          layout: lead?.layout ?? draft.layout,
           bg: lead?.bg ?? draft.bg,
           size: lead?.size ?? draft.size,
           c1: lead?.c1 ?? project.c1,
           c2: lead?.c2 ?? project.c2,
           c3: lead?.c3 ?? project.c3,
+          headlineX: lead?.headlineX ?? null,
+          headlineY: lead?.headlineY ?? null,
+          subX: lead?.subX ?? null,
+          subY: lead?.subY ?? null,
+          ctaX: lead?.ctaX ?? null,
+          ctaY: lead?.ctaY ?? null,
+          showHeadline: lead?.showHeadline ?? true,
+          showSub: lead?.showSub ?? true,
+          showCta: lead?.showCta ?? true,
         },
       }));
+    }
+    if (body.stream === true) {
+      const names = created.map((item) => String.fromCharCode(65 + item.position));
+      return streamGeneration({
+        intro: [
+          `Adding Version ${names.join(', ')} to the same campaign as A and B.`,
+          `Same size (${lead?.size ?? 'as A'}), same template, same text colours ${lead?.c1 ?? project.c1}, ${lead?.c2 ?? project.c2}, ${lead?.c3 ?? project.c3}, and the same text placement. Only the words and the camera angle change.`,
+        ].join('\n'),
+        drafts: resolved.drafts,
+        startLetter: project.versions.length,
+        versions: created,
+        project,
+        ownerEmail: email,
+      });
     }
     const results = await Promise.all(created.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
     const failed = results.find((item) => !item.ok);
@@ -191,10 +232,14 @@ function readApprovedCopy(body: Record<string, unknown>): WrittenLine[] | null {
 }
 
 function streamGeneration(opts: {
-  drafts: VersionDraft[];
+  /** Full brief walk-through for the first generate; a short line for later runs. */
+  intro?: string;
+  drafts?: VersionDraft[];
+  startLetter?: number;
   versions: { id: string; position: number; layout: string; size: string; c1: string; c2: string; c3: string; imageUrl: string | null }[];
   project: Parameters<typeof generateVersionImage>[0]['project'];
   ownerEmail: string;
+  editPrompt?: string;
 }): Response {
   const encoder = new TextEncoder();
   return new Response(new ReadableStream({
@@ -205,29 +250,39 @@ function streamGeneration(opts: {
       const emit = (text: string) => send({ type: 'thought', text });
       try {
         const { project, drafts } = opts;
-        emit(`Reading the brief for ${project.product || project.brandName || 'this ad'}.`);
-        emit([
-          `Brand: ${project.brandName || 'not named'}.`,
-          `Product: ${project.product || 'not named'}.`,
-          `Goal: ${project.goal}.`,
-          `Audience: ${project.audience || 'not set'}.`,
-          `Tone: ${project.tone}. Visual style: ${project.visualStyle}.`,
-          `Platform: ${project.platform}, ${project.format}.`,
-        ].join('\n'));
-        if (project.description.trim()) emit(`What was asked for:\n${project.description.trim().slice(0, 600)}`);
-        if (project.sceneNote.trim()) emit(`Scene the user asked for:\n${project.sceneNote.trim().slice(0, 600)}`);
-        if (project.copyPrompt.trim()) emit(`Copy instruction:\n${project.copyPrompt.trim().slice(0, 600)}`);
-        emit('The approved copy stays as written. The picture is drawn without those words, then the headline is painted on top.');
-        drafts.forEach((draft, index) => {
-          const name = String.fromCharCode(65 + index);
-          emit(`Version ${name} is locked in.\nHeadline: ${draft.headline}\nSupporting line: ${draft.sub || '—'}\nPrimary text: ${draft.primary}`);
-        });
-        emit(`Applying brand colors ${project.c1}, ${project.c2}, and ${project.c3} on the ${project.platform} · ${project.format} layout.`);
-        emit('Nano Banana Pro at 4K is drawing each version.');
+        if (opts.intro) {
+          emit(opts.intro);
+        } else {
+          emit(`Reading the brief for ${project.product || project.brandName || 'this ad'}.`);
+          emit([
+            `Brand: ${project.brandName || 'not named'}.`,
+            `Product: ${project.product || 'not named'}.`,
+            `Goal: ${project.goal}.`,
+            `Audience: ${project.audience || 'not set'}.`,
+            `Tone: ${project.tone}. Visual style: ${project.visualStyle}.`,
+            `Platform: ${project.platform}, ${project.format}.`,
+          ].join('\n'));
+          if (project.description.trim()) emit(`What was asked for:\n${project.description.trim().slice(0, 600)}`);
+          if (project.sceneNote.trim()) emit(`Scene the user asked for:\n${project.sceneNote.trim().slice(0, 600)}`);
+          if (project.copyPrompt.trim()) emit(`Copy instruction:\n${project.copyPrompt.trim().slice(0, 600)}`);
+          emit('The approved copy stays as written. The picture is drawn without those words, then the headline is painted on top.');
+        }
+        if (drafts) {
+          const start = opts.startLetter ?? 0;
+          drafts.forEach((draft, index) => {
+            const name = String.fromCharCode(65 + start + index);
+            emit(`Version ${name} is locked in.\nHeadline: ${draft.headline}\nSupporting line: ${draft.sub || '—'}\nPrimary text: ${draft.primary}`);
+          });
+        }
+        if (!opts.intro) {
+          emit(`Applying brand colors ${project.c1}, ${project.c2}, and ${project.c3} on the ${project.platform} · ${project.format} layout.`);
+        }
+        emit(opts.versions.length === 1 ? 'Nano Banana Pro at 4K is drawing the picture.' : 'Nano Banana Pro at 4K is drawing each version.');
         const results = await Promise.all(opts.versions.map((version) => generateVersionImage({
           project,
           version,
           ownerEmail: opts.ownerEmail,
+          editPrompt: opts.editPrompt,
           onThought: emit,
         })));
         const failed = results.find((item) => !item.ok);

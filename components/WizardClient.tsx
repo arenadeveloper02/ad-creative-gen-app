@@ -225,59 +225,57 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       return;
     }
     appendThought(data.copySource === 'ai' ? 'Platform saved. The approved copy will be used as written.' : 'Platform saved. Using the copy you wrote.');
+    const outcome = await streamGenerate({ mode: 'replace', stream: true, approvedCopy: data.approvedCopy });
+    setSaving(false);
+    if (!outcome.project) {
+      setError(outcome.error ?? 'Could not generate the ad.');
+      setStep(2);
+      return;
+    }
+    if (outcome.error) setError(outcome.error);
+    reachedRef.current = Math.max(reachedRef.current, 3);
+    projectRef.current = outcome.project;
+    setProject(outcome.project);
+  }
+
+  /** Posts to the generate route and reads the NDJSON stream, appending every thought as it arrives. */
+  async function streamGenerate(body: Record<string, unknown>): Promise<{ project: ProjectDTO | null; error: string | null }> {
+    if (!project) return { project: null, error: 'Save the brief first.' };
     const generated = await fetch(`/api/projects/${project.id}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'replace', stream: true, approvedCopy: data.approvedCopy }),
+      body: JSON.stringify(body),
     });
     const type = generated.headers.get('content-type') ?? '';
     if (type.includes('application/json')) {
       const parsed = await readJson(generated);
-      setSaving(false);
-      setError(parsed.ok ? 'Could not generate the ad.' : parsed.error);
-      setStep(2);
-      return;
+      if (parsed.ok && isProject(parsed.data)) return { project: parsed.data, error: null };
+      return { project: null, error: parsed.ok ? 'Could not generate the ad.' : parsed.error };
     }
-    const body = generated.body;
-    if (!body) {
-      setSaving(false);
-      setError('Could not generate the ad.');
-      setStep(2);
-      return;
-    }
-    const reader = body.getReader();
+    const stream = generated.body;
+    if (!stream) return { project: null, error: 'Could not generate the ad.' };
+    const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let nextProject: ProjectDTO | null = null;
     let streamError: string | null = null;
+    const take = (line: string) => {
+      const event = readThoughtEvent(line);
+      if (!event) return;
+      if (event.type === 'thought') appendThought(event.text);
+      if (event.type === 'error') streamError = event.error;
+      if (event.type === 'project') nextProject = event.project;
+    };
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) break;
       buffer += decoder.decode(chunk.value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        const event = readThoughtEvent(line);
-        if (!event) continue;
-        if (event.type === 'thought') appendThought(event.text);
-        if (event.type === 'error') streamError = event.error;
-        if (event.type === 'project') nextProject = event.project;
-      }
+      for (const line of lines) take(line);
     }
-    const tail = readThoughtEvent(buffer);
-    if (tail?.type === 'thought') appendThought(tail.text);
-    if (tail?.type === 'error') streamError = tail.error;
-    if (tail?.type === 'project') nextProject = tail.project;
-    setSaving(false);
-    if (!nextProject) {
-      setError(streamError ?? 'Could not generate the ad.');
-      setStep(2);
-      return;
-    }
-    if (streamError) setError(streamError);
-    reachedRef.current = Math.max(reachedRef.current, 3);
-    projectRef.current = nextProject;
-    setProject(nextProject);
+    take(buffer);
+    return { project: nextProject, error: streamError };
   }
 
   function queuePatch(version: VersionDTO) {
@@ -315,6 +313,23 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     setProject(parsed.data);
   }
 
+  /** Image work after the first generate: extra versions, redraws, and per-image edits all stream their thoughts. */
+  async function mutateWithThoughts(body: Record<string, unknown>) {
+    if (!project) return;
+    setError(null);
+    setBusy(true);
+    setThoughts('');
+    const outcome = await streamGenerate({ ...body, stream: true });
+    setBusy(false);
+    if (!outcome.project) {
+      setError(outcome.error ?? 'Could not update the ad.');
+      return;
+    }
+    if (outcome.error) setError(outcome.error);
+    projectRef.current = outcome.project;
+    setProject(outcome.project);
+  }
+
   return (
     <>
       <AgentCrumb backHref="/" />
@@ -334,10 +349,10 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           error={error}
           onBack={() => goto(2)}
           onPatch={queuePatch}
-          onRefresh={() => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'refresh' })}
-          onAdd={(count) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append', count })}
+          onRefresh={() => void mutateWithThoughts({ mode: 'refresh' })}
+          onAdd={(count) => void mutateWithThoughts({ mode: 'append', count })}
           onRewrite={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id })}
-          onImage={(id, editPrompt) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'image', versionId: id, editPrompt })}
+          onImage={(id, editPrompt) => void mutateWithThoughts({ mode: 'image', versionId: id, editPrompt })}
         />
       )}
     </>

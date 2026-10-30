@@ -209,12 +209,47 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     onAdd(count);
   }
 
+  // Which cards are being redrawn right now: new extras, both A and B on a redraw, or one card on an edit.
+  const [redrawIds, setRedrawIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (busy) return;
+    if (redrawIds.length === 0) return;
+    const pending = project.versions.filter((version) => redrawIds.includes(version.id));
+    const settled = pending.every((version) => {
+      if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] !== undefined;
+      return Boolean(version.imageError);
+    });
+    if (settled) setRedrawIds([]);
+  }, [busy, redrawIds, project.versions, loadedUrls]);
+
+  function requestRefresh() {
+    const ids = project.versions.filter((version) => version.position < 2).map((version) => version.id);
+    for (const version of project.versions) {
+      if (isHttpsUrl(version.imageUrl) && ids.includes(version.id)) delete imageCache.current[version.imageUrl];
+    }
+    setRedrawIds(ids);
+    onRefresh();
+  }
+
+  function requestImage(id: string, editPrompt: string) {
+    setRedrawIds([id]);
+    onImage(id, editPrompt);
+  }
+
   function extraPending(version: VersionDTO): boolean {
+    if (redrawIds.includes(version.id)) {
+      if (busy) return true;
+      if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] === undefined;
+      return !version.imageError;
+    }
     if (!appendBusy) return false;
     if (version.position < appendFromRef.current) return false;
     if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] === undefined;
     return !version.imageError;
   }
+
+  const working = busy || appendBusy || redrawIds.length > 0;
 
   function plannedLetters(count: number): string {
     const start = project.versions.length;
@@ -331,7 +366,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       className="btn sm"
                       style={{ marginTop: 8 }}
                       disabled={busy || appendBusy || (edits[version.id] ?? '').trim() === ''}
-                      onClick={(e) => { e.stopPropagation(); onImage(version.id, edits[version.id] ?? ''); }}
+                      onClick={(e) => { e.stopPropagation(); requestImage(version.id, edits[version.id] ?? ''); }}
                     >
                       {busy && !appendBusy ? 'Working…' : 'Update this image'}
                     </button>
@@ -385,7 +420,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     : `Type a number, such as 4, 5, or 6. ${typedCount()} makes ${plannedLetters(typedCount() ?? 1)}. Up to ${MAX_VERSIONS} in total.`}
               </p>
               <div className="footer">
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
+                <button type="button" className="btn ghost sm" disabled={working} onClick={requestRefresh}>{working ? 'Working…' : 'Regenerate both images'}</button>
                 <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
                   Download all versions
                 </button>
@@ -405,7 +440,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
             </div>
             <div>
-              {thoughtText && <ThoughtChain text={thoughtText} thinking={false} />}
+              {(thoughtText || working) && <ThoughtChain text={thoughtText} thinking={working} />}
               <h4>Modify version {letter(active.position)}</h4>
               <p className="hint">Rename here. Drag on the preview to move. Subline is optional.</p>
               <label htmlFor="mHeadline">Headline</label>
@@ -470,7 +505,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </select>
               <div className="footer">
                 <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onRewrite(active.id)}>Rewrite copy</button>
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={onRefresh}>{busy ? 'Working…' : 'Regenerate both images'}</button>
+                <button type="button" className="btn ghost sm" disabled={working} onClick={requestRefresh}>{working ? 'Working…' : 'Regenerate both images'}</button>
                 <button type="button" className="btn sm" disabled={busy || !imageReady(active)} onClick={() => download(active)}>Download PNG</button>
               </div>
               <div className="footer" style={{ justifyContent: 'flex-start' }}>
