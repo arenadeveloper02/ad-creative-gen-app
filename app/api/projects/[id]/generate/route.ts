@@ -121,7 +121,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const taken = project.versions.map((item) => item.headline).filter((item) => item.trim() !== '');
     const resolved = await resolveDrafts(asked, project.versions.length, taken.length > 0 ? taken.join('; ') : undefined);
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
-    // Extras copy Version A exactly: size, template, layout, text colours, text placement, and which lines show.
+    // Extras match the first render, not the user's later edits to A:
+    // brand colours from the brief, the original text placement, every line shown, and A's size, layout, and template.
     // Only the copy and the picture angle change, so the set reads as one campaign.
     const lead = project.versions[0];
     const created = [];
@@ -133,22 +134,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           headline: draft.headline,
           sub: draft.sub,
           primary: draft.primary,
-          cta: lead?.cta ?? draft.cta,
+          cta: project.cta || draft.cta,
           layout: lead?.layout ?? draft.layout,
           bg: lead?.bg ?? draft.bg,
           size: lead?.size ?? draft.size,
-          c1: lead?.c1 ?? project.c1,
-          c2: lead?.c2 ?? project.c2,
-          c3: lead?.c3 ?? project.c3,
-          headlineX: lead?.headlineX ?? null,
-          headlineY: lead?.headlineY ?? null,
-          subX: lead?.subX ?? null,
-          subY: lead?.subY ?? null,
-          ctaX: lead?.ctaX ?? null,
-          ctaY: lead?.ctaY ?? null,
-          showHeadline: lead?.showHeadline ?? true,
-          showSub: lead?.showSub ?? true,
-          showCta: lead?.showCta ?? true,
+          c1: project.c1,
+          c2: project.c2,
+          c3: project.c3,
+          headlineX: null,
+          headlineY: null,
+          subX: null,
+          subY: null,
+          ctaX: null,
+          ctaY: null,
+          showHeadline: true,
+          showSub: true,
+          showCta: true,
         },
       }));
     }
@@ -157,7 +158,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return streamGeneration({
         intro: [
           `Adding Version ${names.join(', ')} to the same campaign as A and B.`,
-          `Same size (${lead?.size ?? 'as A'}), same template, same text colours ${lead?.c1 ?? project.c1}, ${lead?.c2 ?? project.c2}, ${lead?.c3 ?? project.c3}, and the same text placement. Only the words and the camera angle change.`,
+          `Same size (${lead?.size ?? 'as A'}), same template, and the brand colours from the first render ${project.c1}, ${project.c2}, ${project.c3}. Only the words and the camera angle change.`,
         ].join('\n'),
         drafts: resolved.drafts,
         startLetter: project.versions.length,

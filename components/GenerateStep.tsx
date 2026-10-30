@@ -250,6 +250,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   }
 
   const working = busy || appendBusy || redrawIds.length > 0;
+  // Extra versions show loaders only. Thinking streams for the first generate, redraws, and single-image edits.
+  const thinkingNow = redrawIds.length > 0 || (busy && !appendBusy);
 
   function plannedLetters(count: number): string {
     const start = project.versions.length;
@@ -440,7 +442,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
             </div>
             <div>
-              {(thoughtText || working) && <ThoughtChain text={thoughtText} thinking={working} />}
+              {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
               <h4>Modify version {letter(active.position)}</h4>
               <p className="hint">Rename here. Drag on the preview to move. Subline is optional.</p>
               <label htmlFor="mHeadline">Headline</label>

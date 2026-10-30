@@ -350,7 +350,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           onBack={() => goto(2)}
           onPatch={queuePatch}
           onRefresh={() => void mutateWithThoughts({ mode: 'refresh' })}
-          onAdd={(count) => void mutateWithThoughts({ mode: 'append', count })}
+          onAdd={(count) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append', count })}
           onRewrite={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id })}
           onImage={(id, editPrompt) => void mutateWithThoughts({ mode: 'image', versionId: id, editPrompt })}
         />
