@@ -13,20 +13,33 @@ export function buildLlmInput(systemPrompt: string, prompt: string): Record<stri
 }
 
 // ---------------------------------------------------------------------------
-// Every image choice maps to one fal.ai endpoint here. Same ids as the video
-// agent so the same models and the same per-image pricing apply.
+// Image models on fal.ai. Nano Banana Pro at 4K is the default.
+// Every OpenAI GPT Image model currently listed on fal is included below.
 // ---------------------------------------------------------------------------
 
 export const IMAGE_MODELS = [
-  { value: 'nano-banana-pro', label: 'Nano Banana Pro', hint: 'Highest quality · 4K PNG' },
-  { value: 'nano-banana-2', label: 'Nano Banana 2', hint: 'Best prompt accuracy · ~$0.05 / image' },
-  { value: 'nano-banana', label: 'Nano Banana', hint: 'Fast · ~$0.05 / image' },
-  { value: 'gpt-image-1', label: 'GPT Image 1', hint: 'Strong text in image · ~$0.05 / image' },
-  { value: 'flux-1.1-pro', label: 'FLUX 1.1 Pro', hint: 'Photoreal · ~$0.05 / image' },
+  { value: 'nano-banana-pro', label: 'Nano Banana Pro', hint: 'Highest quality · Google Gemini 3 Pro Image · 1K / 2K / 4K' },
+  { value: 'nano-banana-2', label: 'Nano Banana 2', hint: 'Fast high quality · Google Gemini Flash Image · 1K / 2K / 4K' },
+  { value: 'nano-banana', label: 'Nano Banana', hint: 'Fast · fixed output size' },
+  { value: 'gpt-image-1', label: 'GPT Image 1 (OpenAI)', hint: 'OpenAI on fal · strong text in the picture' },
+  { value: 'gpt-image-1.5', label: 'GPT Image 1.5 (OpenAI)', hint: 'OpenAI on fal · higher fidelity than GPT Image 1' },
+  { value: 'gpt-image-2', label: 'GPT Image 2 (OpenAI)', hint: 'OpenAI on fal · dense typography · up to 4K' },
+  { value: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare (OpenAI)', hint: 'OpenAI on fal · fast default GPT Image 2.5' },
+  { value: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst (OpenAI)', hint: 'OpenAI on fal · slower · more detail' },
+  { value: 'flux-1.1-pro', label: 'FLUX 1.1 Pro', hint: 'Photoreal · fal FLUX Pro' },
 ] as const;
 
 export type ImageModel = (typeof IMAGE_MODELS)[number]['value'];
 export const DEFAULT_IMAGE_MODEL: ImageModel = 'nano-banana-pro';
+
+export const IMAGE_RESOLUTIONS = [
+  { value: '1K', label: '1K' },
+  { value: '2K', label: '2K' },
+  { value: '4K', label: '4K' },
+] as const;
+
+export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number]['value'];
+export const DEFAULT_IMAGE_RESOLUTION: ImageResolution = '4K';
 
 export function isImageModel(value: unknown): value is ImageModel {
   return typeof value === 'string' && IMAGE_MODELS.some((model) => model.value === value);
@@ -34,6 +47,33 @@ export function isImageModel(value: unknown): value is ImageModel {
 
 export function canonicalImageModel(value: unknown): ImageModel {
   return isImageModel(value) ? value : DEFAULT_IMAGE_MODEL;
+}
+
+export function isImageResolution(value: unknown): value is ImageResolution {
+  return typeof value === 'string' && IMAGE_RESOLUTIONS.some((item) => item.value === value);
+}
+
+export function canonicalImageResolution(value: unknown): ImageResolution {
+  return isImageResolution(value) ? value : DEFAULT_IMAGE_RESOLUTION;
+}
+
+/** Which resolution choices this model actually accepts on fal. */
+export function resolutionsForModel(model: ImageModel): readonly ImageResolution[] {
+  if (model === 'nano-banana-pro' || model === 'nano-banana-2') return ['1K', '2K', '4K'];
+  if (
+    model === 'gpt-image-1'
+    || model === 'gpt-image-1.5'
+    || model === 'gpt-image-2'
+    || model === 'gpt-image-2.5-flare'
+    || model === 'gpt-image-2.5-sunburst'
+  ) {
+    return ['1K', '2K', '4K'];
+  }
+  return ['1K'];
+}
+
+export function modelLabel(model: ImageModel): string {
+  return IMAGE_MODELS.find((item) => item.value === model)?.label ?? model;
 }
 
 const NANO_RATIOS = new Set(['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']);
@@ -72,10 +112,46 @@ function toolkitImageSize(ratio: string): string | { width: number; height: numb
   }
 }
 
-function gptImageSize(ratio: string): string {
-  if (ratio === '9:16' || ratio === '3:4' || ratio === '4:5' || ratio === '2:3') return 'portrait_4_3';
-  if (ratio === '1:1') return 'square_hd';
-  return 'landscape_4_3';
+/** GPT Image 1 / 1.5 fixed enums on fal. */
+function gptFixedSize(ratio: string): string {
+  if (ratio === '9:16' || ratio === '3:4' || ratio === '4:5' || ratio === '2:3') return '1024x1536';
+  if (ratio === '1:1') return '1024x1024';
+  return '1536x1024';
+}
+
+function gptQuality(resolution: ImageResolution): 'low' | 'medium' | 'high' {
+  if (resolution === '4K') return 'high';
+  if (resolution === '2K') return 'medium';
+  return 'low';
+}
+
+/** GPT Image 2 / 2.5: presets for 1K, custom edges for 2K and 4K (max edge 3840). */
+function gptModernSize(ratio: string, resolution: ImageResolution): string | { width: number; height: number } {
+  if (resolution === '1K') return toolkitImageSize(ratio);
+  const long = resolution === '4K' ? 3840 : 2560;
+  const short = Math.round(long * (
+    ratio === '1:1' ? 1
+      : ratio === '16:9' || ratio === '21:9' ? 9 / 16
+        : ratio === '9:16' || ratio === '2:3' ? 16 / 9
+          : ratio === '4:3' || ratio === '3:2' || ratio === '5:4' ? 3 / 4
+            : ratio === '3:4' || ratio === '4:5' ? 4 / 3
+              : 1
+  ));
+  const even = (n: number) => Math.max(16, Math.round(n / 16) * 16);
+  if (ratio === '1:1') return { width: even(long), height: even(long) };
+  if (ratio === '9:16' || ratio === '2:3' || ratio === '3:4' || ratio === '4:5') {
+    return { width: even(short), height: even(long) };
+  }
+  return { width: even(long), height: even(short) };
+}
+
+function gptModernQuality(resolution: ImageResolution, advanced: boolean): string {
+  if (advanced) {
+    if (resolution === '4K') return 'xhigh';
+    if (resolution === '2K') return 'high';
+    return 'medium';
+  }
+  return gptQuality(resolution);
 }
 
 export interface ImageJobSpec {
@@ -83,21 +159,77 @@ export interface ImageJobSpec {
   input: Record<string, unknown>;
 }
 
+function gptLegacyJob(opts: {
+  prompt: string;
+  size: string;
+  resolution: ImageResolution;
+  refs: string[];
+  textEndpoint: string;
+  editEndpoint: string;
+}): ImageJobSpec {
+  const ratio = ratioForSize(opts.size);
+  const input = {
+    prompt: opts.prompt,
+    image_size: gptFixedSize(ratio),
+    quality: gptQuality(opts.resolution),
+    num_images: 1,
+    output_format: 'png',
+  };
+  if (opts.refs.length > 0) {
+    return { endpoint: opts.editEndpoint, input: { ...input, image_urls: opts.refs } };
+  }
+  return { endpoint: opts.textEndpoint, input };
+}
+
+function gptModernJob(opts: {
+  prompt: string;
+  size: string;
+  resolution: ImageResolution;
+  refs: string[];
+  textEndpoint: string;
+  editEndpoint: string;
+  advancedQuality: boolean;
+}): ImageJobSpec {
+  const ratio = ratioForSize(opts.size);
+  const input = {
+    prompt: opts.prompt,
+    image_size: gptModernSize(ratio, opts.resolution),
+    quality: gptModernQuality(opts.resolution, opts.advancedQuality),
+    num_images: 1,
+    output_format: 'png',
+  };
+  if (opts.refs.length > 0) {
+    return { endpoint: opts.editEndpoint, input: { ...input, image_urls: opts.refs } };
+  }
+  return { endpoint: opts.textEndpoint, input };
+}
+
 /** Text-to-image, or the edit endpoint when reference images are present. */
-export function buildImageJob(opts: { prompt: string; size: string; model: ImageModel; referenceImageUrls: string[] }): ImageJobSpec {
+export function buildImageJob(opts: {
+  prompt: string;
+  size: string;
+  model: ImageModel;
+  resolution?: ImageResolution;
+  referenceImageUrls: string[];
+}): ImageJobSpec {
   const ratio = ratioForSize(opts.size);
   const refs = opts.referenceImageUrls.filter((u) => /^https:\/\//i.test(u)).slice(0, 6);
   const nano = NANO_RATIOS.has(ratio) ? ratio : '1:1';
+  const allowed = resolutionsForModel(opts.model);
+  const resolution = allowed.includes(opts.resolution as ImageResolution)
+    ? (opts.resolution as ImageResolution)
+    : (allowed[allowed.length - 1] ?? DEFAULT_IMAGE_RESOLUTION);
+
   switch (opts.model) {
     case 'nano-banana-pro': {
-      const quality = { resolution: '4K', num_images: 1, output_format: 'png', thinking_level: 'high' };
+      const quality = { resolution, num_images: 1, output_format: 'png', thinking_level: 'high' };
       if (refs.length > 0) {
         return { endpoint: 'fal-ai/nano-banana-pro/edit', input: { prompt: opts.prompt, image_urls: refs, aspect_ratio: nano, ...quality } };
       }
       return { endpoint: 'fal-ai/nano-banana-pro', input: { prompt: opts.prompt, aspect_ratio: nano, ...quality } };
     }
     case 'nano-banana-2': {
-      const quality = { resolution: '4K', num_images: 1, output_format: 'png', thinking_level: 'high' };
+      const quality = { resolution, num_images: 1, output_format: 'png', thinking_level: 'high' };
       if (refs.length > 0) {
         return { endpoint: 'fal-ai/nano-banana-2/edit', input: { prompt: opts.prompt, image_urls: refs, aspect_ratio: nano, ...quality } };
       }
@@ -109,10 +241,53 @@ export function buildImageJob(opts: { prompt: string; size: string; model: Image
       }
       return { endpoint: 'fal-ai/nano-banana', input: { prompt: opts.prompt, aspect_ratio: nano, num_images: 1, output_format: 'png' } };
     case 'gpt-image-1':
-      if (refs.length > 0) {
-        return { endpoint: 'fal-ai/gpt-image-1/edit-image', input: { prompt: opts.prompt, image_urls: refs, image_size: gptImageSize(ratio), quality: 'medium', num_images: 1 } };
-      }
-      return { endpoint: 'fal-ai/gpt-image-1/text-to-image', input: { prompt: opts.prompt, image_size: gptImageSize(ratio), quality: 'medium', num_images: 1 } };
+      return gptLegacyJob({
+        prompt: opts.prompt,
+        size: opts.size,
+        resolution,
+        refs,
+        textEndpoint: 'fal-ai/gpt-image-1/text-to-image',
+        editEndpoint: 'fal-ai/gpt-image-1/edit-image',
+      });
+    case 'gpt-image-1.5':
+      return gptLegacyJob({
+        prompt: opts.prompt,
+        size: opts.size,
+        resolution,
+        refs,
+        textEndpoint: 'fal-ai/gpt-image-1.5',
+        editEndpoint: 'fal-ai/gpt-image-1.5/edit',
+      });
+    case 'gpt-image-2':
+      return gptModernJob({
+        prompt: opts.prompt,
+        size: opts.size,
+        resolution,
+        refs,
+        textEndpoint: 'openai/gpt-image-2',
+        editEndpoint: 'openai/gpt-image-2/edit',
+        advancedQuality: false,
+      });
+    case 'gpt-image-2.5-flare':
+      return gptModernJob({
+        prompt: opts.prompt,
+        size: opts.size,
+        resolution,
+        refs,
+        textEndpoint: 'openai/gpt-image-2.5/flare/text-to-image',
+        editEndpoint: 'openai/gpt-image-2.5/flare/edit',
+        advancedQuality: true,
+      });
+    case 'gpt-image-2.5-sunburst':
+      return gptModernJob({
+        prompt: opts.prompt,
+        size: opts.size,
+        resolution,
+        refs,
+        textEndpoint: 'openai/gpt-image-2.5/sunburst/text-to-image',
+        editEndpoint: 'openai/gpt-image-2.5/sunburst/edit',
+        advancedQuality: true,
+      });
     case 'flux-1.1-pro':
       return { endpoint: 'fal-ai/flux-pro/v1.1', input: { prompt: opts.prompt, image_size: toolkitImageSize(ratio), num_images: 1, output_format: 'jpeg', safety_tolerance: '2' } };
   }

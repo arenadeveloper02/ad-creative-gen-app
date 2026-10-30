@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ImageModel } from '@/lib/fal-models';
+import {
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_IMAGE_RESOLUTION,
+  IMAGE_MODELS,
+  IMAGE_RESOLUTIONS,
+  canonicalImageModel,
+  canonicalImageResolution,
+  resolutionsForModel,
+  type ImageModel,
+  type ImageResolution,
+} from '@/lib/fal-models';
 import { PLATFORMS, TONES, VISUAL_STYLES } from '@/lib/platforms';
 import type { ProjectDTO } from '@/lib/types';
 
@@ -18,6 +28,7 @@ export interface PlatformPayload {
   avoid: string;
   copyPrompt: string;
   imageModel: ImageModel;
+  imageResolution: ImageResolution;
   approvedCopy?: { headline: string; sub: string; primary: string }[];
 }
 
@@ -44,7 +55,11 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const [subline, setSubline] = useState(project.subline);
   const [avoid, setAvoid] = useState(project.avoid);
   const [copyPrompt, setCopyPrompt] = useState(project.copyPrompt);
-  const imageModel: ImageModel = 'nano-banana-pro';
+  const [imageModel, setImageModel] = useState<ImageModel>(canonicalImageModel(project.imageModel || DEFAULT_IMAGE_MODEL));
+  const [imageResolution, setImageResolution] = useState<ImageResolution>(
+    canonicalImageResolution(project.imageResolution || DEFAULT_IMAGE_RESOLUTION),
+  );
+  const resolutionChoices = resolutionsForModel(imageModel);
   const [preview, setPreview] = useState<{ headline: string; sub: string; primary: string }[] | null>(null);
   const [approved, setApproved] = useState(false);
   const [writing, setWriting] = useState(false);
@@ -52,7 +67,8 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
   const skipClear = useRef(true);
 
   function currentPayload(): PlatformPayload {
-    return { platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel };
+    const resolution = resolutionChoices.includes(imageResolution) ? imageResolution : (resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION);
+    return { platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel, imageResolution: resolution };
   }
 
   const onDraftRef = useRef(onDraft);
@@ -61,7 +77,13 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
     onDraftRef.current(currentPayload());
     // currentPayload reads the fields listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel]);
+  }, [platform, format, audience, tone, visualStyle, cta, copySource, headline, subline, avoid, copyPrompt, imageModel, imageResolution]);
+
+  useEffect(() => {
+    if (!resolutionChoices.includes(imageResolution)) {
+      setImageResolution(resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION);
+    }
+  }, [imageModel, imageResolution, resolutionChoices]);
 
   useEffect(() => {
     if (skipClear.current) {
@@ -117,6 +139,36 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
 
         <div className="row">
           <div>
+            <label htmlFor="imageModel">Image model</label>
+            <select id="imageModel" value={imageModel} onChange={(e) => setImageModel(canonicalImageModel(e.target.value))}>
+              {IMAGE_MODELS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <p className="hint">{IMAGE_MODELS.find((item) => item.value === imageModel)?.hint}</p>
+          </div>
+          <div>
+            <label htmlFor="imageResolution">Resolution</label>
+            <select
+              id="imageResolution"
+              value={resolutionChoices.includes(imageResolution) ? imageResolution : (resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION)}
+              onChange={(e) => setImageResolution(canonicalImageResolution(e.target.value))}
+              disabled={resolutionChoices.length <= 1}
+            >
+              {(resolutionChoices.length > 1 ? IMAGE_RESOLUTIONS.filter((item) => resolutionChoices.includes(item.value)) : [{ value: '1K' as const, label: 'Fixed by model' }]).map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <p className="hint">Default is Nano Banana Pro at 4K. Change either only when you need to.</p>
+          </div>
+        </div>
+
+        <div className="row">
+          <div>
             <label htmlFor="audience">Target audience</label>
             <input id="audience" type="text" value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="e.g. B2B marketing leaders, US, 30-50" />
           </div>
@@ -143,9 +195,6 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
             <input id="cta" type="text" value={cta} onChange={(e) => setCta(e.target.value)} />
           </div>
         </div>
-
-        <label>Image model</label>
-        <p className="hint">Every image is made with Nano Banana Pro on fal.ai at 4K, the highest resolution that model accepts. The first generate makes versions A and B. Extra versions use the same model.</p>
 
         <label>Ad copy source</label>
         <div className="chips">

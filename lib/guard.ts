@@ -1,6 +1,6 @@
+import { canonicalImageModel, canonicalImageResolution, type ImageModel, type ImageResolution } from '@/lib/fal-models';
 import { ASSET_KINDS, BACKGROUNDS, COPY_SOURCES, GOALS, LAYOUTS, PLATFORMS, SIZES, TONES, VISUAL_STYLES, type AssetKind, type Background, type CopySource, type Layout } from '@/lib/platforms';
 import { MAX_NAME, MAX_SHORT, MAX_TEXT, MAX_URL } from '@/lib/limits';
-import { canonicalImageModel, type ImageModel } from '@/lib/fal-models';
 
 const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 const ID_RE = /^[a-z0-9]{8,40}$/i;
@@ -117,6 +117,7 @@ export interface PlatformInput {
   avoid: string;
   copyPrompt: string;
   imageModel: ImageModel;
+  imageResolution: ImageResolution;
 }
 
 export function parsePlatform(body: Record<string, unknown>): PlatformInput | { error: string } {
@@ -137,6 +138,7 @@ export function parsePlatform(body: Record<string, unknown>): PlatformInput | { 
     avoid: cleanText(body.avoid, MAX_TEXT),
     copyPrompt: cleanText(body.copyPrompt, MAX_TEXT),
     imageModel: canonicalImageModel(body.imageModel),
+    imageResolution: canonicalImageResolution(body.imageResolution),
   };
 }
 

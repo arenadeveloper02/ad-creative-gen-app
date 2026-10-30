@@ -278,7 +278,11 @@ function streamGeneration(opts: {
         if (!opts.intro) {
           emit(`Applying brand colors ${project.c1}, ${project.c2}, and ${project.c3} on the ${project.platform} · ${project.format} layout.`);
         }
-        emit(opts.versions.length === 1 ? 'Nano Banana Pro at 4K is drawing the picture.' : 'Nano Banana Pro at 4K is drawing each version.');
+        emit(
+          opts.versions.length === 1
+            ? `${project.imageModel} at ${project.imageResolution} is drawing the picture.`
+            : `${project.imageModel} at ${project.imageResolution} is drawing each version.`,
+        );
         const results = await Promise.all(opts.versions.map((version) => generateVersionImage({
           project,
           version,

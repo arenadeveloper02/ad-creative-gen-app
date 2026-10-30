@@ -432,7 +432,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               <div className="card" style={{ marginTop: 14, padding: 14 }}>
                 <h4>Primary text</h4>
                 <p>{active.primary}</p>
-                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel}</p>
+                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel} · {project.imageResolution}</p>
                 {active.imagePrompt && (
                   <details style={{ marginTop: 8 }}>
                     <summary className="hint" style={{ cursor: 'pointer' }}>Image prompt sent to fal.ai</summary>

@@ -1,7 +1,7 @@
 import type { AdAsset, AdProject, AdVersion } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { falKey, runFalJob } from '@/lib/fal';
-import { buildImageJob, readImageUrl } from '@/lib/fal-models';
+import { buildImageJob, canonicalImageModel, canonicalImageResolution, modelLabel, readImageUrl } from '@/lib/fal-models';
 import { buildImagePrompt } from '@/lib/image-prompt';
 import { isRecord } from '@/lib/json';
 import { logUsage, reportFalUsage } from '@/lib/usage';
@@ -52,7 +52,7 @@ export interface GenerateImageResult {
   error: string | null;
 }
 
-/** Generates one Fal image for a version and stores the result on the row. Every image, including an edit, uses Nano Banana Pro at 4K. */
+/** Generates one Fal image for a version and stores the result on the row. Uses the project's chosen model and resolution. */
 export async function generateVersionImage(opts: {
   project: AdProject & { assets: AssetMeta[] };
   version: Pick<AdVersion, 'id' | 'position' | 'layout' | 'size' | 'c1' | 'c2' | 'c3' | 'imageUrl'>;
@@ -63,6 +63,8 @@ export async function generateVersionImage(opts: {
   const { project, version } = opts;
   const note = opts.onThought ?? (() => undefined);
   const label = `Version ${String.fromCharCode(65 + version.position)}`;
+  const model = canonicalImageModel(project.imageModel);
+  const resolution = canonicalImageResolution(project.imageResolution);
   const change = opts.editPrompt?.trim() ?? '';
   if (change !== '') {
     if (!version.imageUrl || !/^https:\/\//i.test(version.imageUrl)) {
@@ -74,8 +76,8 @@ export async function generateVersionImage(opts: {
       'Keep the same people, product, logo, colours, and framing.',
       'Do not add any words, letters, captions, or watermarks.',
     ].join('\n');
-    note(`${label}: editing this image only. ${change}`);
-    const job = buildImageJob({ prompt, size: version.size, model: 'nano-banana-pro', referenceImageUrls: [version.imageUrl] });
+    note(`${label}: editing this image only with ${modelLabel(model)} at ${resolution}. ${change}`);
+    const job = buildImageJob({ prompt, size: version.size, model, resolution, referenceImageUrls: [version.imageUrl] });
     const run = await runFalJob(job.endpoint, job.input, 180000, (update) => {
       if (update.logs.length > 0) note(`${label}: ${update.logs.join(' ')}`);
       else if (update.status) note(`${label}: Fal is ${update.status.toLowerCase().replace(/_/g, ' ')}.`);
@@ -92,15 +94,14 @@ export async function generateVersionImage(opts: {
         projectId: project.id,
         kind: 'image',
         provider: 'fal',
-        model: 'nano-banana-pro',
-        meta: { versionId: version.id, endpoint: job.endpoint, requestId: run.requestId, edit: true },
+        model,
+        meta: { versionId: version.id, endpoint: job.endpoint, requestId: run.requestId, edit: true, resolution },
       });
       if (run.requestId) await reportFalUsage({ email: opts.ownerEmail, endpointId: run.endpointId, requestId: run.requestId });
     }
     return { ok: imageUrl !== null, imageUrl, prompt, error };
   }
 
-  const model = 'nano-banana-pro' as const;
   note(`${label}: checking the logo and reference files.`);
   const refs = await referenceUrls(project.assets);
   note(refs.urls.length > 0
@@ -127,8 +128,8 @@ export async function generateVersionImage(opts: {
     variant: version.position,
   });
 
-  note(`${label}: sending this prompt to Nano Banana Pro at 4K.\n${prompt}`);
-  const job = buildImageJob({ prompt, size: version.size, model, referenceImageUrls: refs.urls });
+  note(`${label}: sending this prompt to ${modelLabel(model)} at ${resolution}.\n${prompt}`);
+  const job = buildImageJob({ prompt, size: version.size, model, resolution, referenceImageUrls: refs.urls });
   const run = await runFalJob(job.endpoint, job.input, 180000, (update) => {
     if (update.logs.length > 0) note(`${label}: ${update.logs.join(' ')}`);
     else if (update.status) note(`${label}: Fal is ${update.status.toLowerCase().replace(/_/g, ' ')}.`);

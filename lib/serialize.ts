@@ -74,6 +74,7 @@ export function serializeProject(row: AdProject & { assets: AssetRow[]; versions
     avoid: row.avoid,
     copyPrompt: row.copyPrompt,
     imageModel: row.imageModel,
+    imageResolution: row.imageResolution,
     step: row.step,
     status: row.status,
     updatedAt: row.updatedAt.toISOString(),
