@@ -34,7 +34,10 @@
 .copy-preview strong { display: block; margin-bottom: 6px; }
 .copy-preview p { margin: 0 0 6px; }
 .thought-chain { margin-top: 22px; }
-.thought-toggle { background: none; border: 0; padding: 0; cursor: pointer; color: var(--aurora-text3); font: inherit; }
+.thought-toggle {
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--aurora-text3); font: inherit;
+  display: inline-flex; align-items: center; gap: 8px;
+}
 .thought-label { font-size: 14px; }
 .thought-label.run {
   background: linear-gradient(90deg, var(--aurora-text3), var(--aurora-text), var(--aurora-text3));
@@ -57,6 +60,32 @@
 .think-step .detail { display: block; font-weight: 400; font-size: 12px; color: var(--aurora-text3); }
 .bar { height: 3px; background: var(--aurora-track); border-radius: 3px; overflow: hidden; margin-top: 12px; }
 .bar span { display: block; height: 100%; background: var(--aurora-grad-primary); transition: width 0.4s; }
+.bar.run span { animation: bar-pulse 1.2s ease-in-out infinite; }
+.creating-head { display: flex; align-items: center; gap: 10px; }
+.creating-head h4 { margin: 0; }
+.creating-live { margin-top: 8px; color: var(--aurora-text); font-weight: 600; }
+.preview-wait {
+  position: relative; min-height: 220px; border-radius: 12px; background: var(--aurora-inset);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden;
+}
+.preview-wait::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.12) 50%, transparent 80%);
+  background-size: 200% 100%;
+  animation: preview-sheen 1.5s linear infinite;
+}
+.preview-wait-label { position: relative; z-index: 1; font-size: 12px; font-weight: 600; color: var(--aurora-text3); }
+.ad-spinner {
+  position: relative; z-index: 1; width: 36px; height: 36px; border-radius: 50%;
+  border: 3px solid var(--aurora-line); border-top-color: var(--aurora-c1);
+  animation: spin 0.85s linear infinite; flex-shrink: 0;
+}
+.ad-spinner.sm { width: 14px; height: 14px; border-width: 2px; margin-top: 2px; }
+@keyframes preview-sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes bar-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .ad-spinner, .preview-wait::before, .bar.run span { animation-duration: 2.4s; }
+}
 input[type='url'] {
   width: 100%; background-color: var(--aurora-glass2); border: 1px solid var(--aurora-line);
   border-radius: 16px; color: var(--aurora-text); padding: 20px 24px; font-size: 15px; line-height: 1.5; outline: none;

@@ -221,24 +221,33 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 {[0, 1].map((item) => (
                   <div key={item} className="vcard">
                     <div className="vhead"><strong>Version {letter(item)}</strong></div>
-                    <div className="sk" style={{ height: 180, background: 'var(--aurora-inset)' }} />
+                    <div className="preview-wait" role="status" aria-label={`Version ${letter(item)} is still rendering`}>
+                      <span className="ad-spinner" aria-hidden="true" />
+                      <span className="preview-wait-label">Rendering…</span>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
             <div>
-              <h4>Creating your ads…</h4>
-              <p className="hint">This takes a few seconds. Feel free to look away — we&apos;ll have it ready.</p>
+              <div className="creating-head">
+                <span className="ad-spinner sm" aria-hidden="true" />
+                <h4>Creating your ads…</h4>
+              </div>
+              <p className="hint">Still working. Spinners stay until the final pictures show in Version A and B.</p>
               {progress.steps.map((step) => (
                 <div key={step.title} className={`think-step ${step.state}`}>
-                  <span aria-hidden="true">{step.state === 'done' ? '✓' : step.state === 'run' ? '•' : '○'}</span>
+                  <span aria-hidden="true">
+                    {step.state === 'done' ? '✓' : step.state === 'run' ? <span className="ad-spinner sm" /> : '○'}
+                  </span>
                   <span>
                     {step.title}
                     <span className="detail">{step.detail}</span>
                   </span>
                 </div>
               ))}
-              <div className="bar"><span style={{ width: `${progress.bar}%` }} /></div>
+              <div className="bar run"><span style={{ width: `${progress.bar}%` }} /></div>
+              <p className="hint creating-live">In progress — do not leave this page until the images finish.</p>
               <ThoughtChain text={thoughtText} thinking />
             </div>
           </div>
@@ -428,6 +437,7 @@ function ThoughtChain({ text, thinking }: { text: string; thinking: boolean }) {
   return (
     <div className="thought-chain">
       <button type="button" className="thought-toggle" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        {thinking && <span className="ad-spinner sm" aria-hidden="true" />}
         <span className={thinking ? 'thought-label run' : 'thought-label'}>{thinking ? 'Thinking…' : 'Thoughts'}</span>
       </button>
       {open && (
