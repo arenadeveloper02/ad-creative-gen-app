@@ -65,6 +65,9 @@ export function buildImagePrompt(input: ImagePromptInput): string {
   lines.push(`Mood: ${TONE_NOTES[input.tone] ?? input.tone}.`);
   lines.push(`Brand colours ${input.c1}, ${input.c2}, and ${input.c3} are the professional palette. Keep them. If they read as blue, use a corporate navy or blue. If they read as red, use a strong brand red. Put that colour on the product interface, logo area, clothing accents, and graphic shapes so the ad looks like a finished B2B campaign. Do not flatten the whole room into one tint.`);
   lines.push(`Composition: ${LAYOUT_NOTES[input.layout]}. ${VARIANT_NOTES[input.variant % VARIANT_NOTES.length]}.`);
+  if (input.variant >= 2) {
+    lines.push('This is another version in the same campaign as Version A and B. Keep the same format, aspect ratio, production quality, lighting family, scene world, and brand colour treatment. Change only the camera angle and framing so it still looks like the same ad set.');
+  }
   if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives.');
   if (input.hasLogo) lines.push('The attached logo is the brand mark; place it small and legible, never distorted.');
   lines.push('Photorealistic, high detail, commercial quality, correct anatomy and product proportions.');

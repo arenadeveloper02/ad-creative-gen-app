@@ -104,10 +104,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const taken = project.versions.map((item) => item.headline).filter((item) => item.trim() !== '');
     const resolved = await resolveDrafts(asked, project.versions.length, taken.length > 0 ? taken.join('; ') : undefined);
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
+    // Lock size, colours, and background to Version A so extras stay the same format and quality level.
+    const lead = project.versions[0];
     const created = [];
     for (const [index, draft] of resolved.drafts.entries()) {
       created.push(await prisma.adVersion.create({
-        data: { projectId: project.id, position: project.versions.length + index, ...draft, c1: project.c1, c2: project.c2, c3: project.c3 },
+        data: {
+          projectId: project.id,
+          position: project.versions.length + index,
+          headline: draft.headline,
+          sub: draft.sub,
+          primary: draft.primary,
+          cta: draft.cta,
+          layout: draft.layout,
+          bg: lead?.bg ?? draft.bg,
+          size: lead?.size ?? draft.size,
+          c1: lead?.c1 ?? project.c1,
+          c2: lead?.c2 ?? project.c2,
+          c3: lead?.c3 ?? project.c3,
+        },
       }));
     }
     const results = await Promise.all(created.map((version) => generateVersionImage({ project, version, ownerEmail: email })));

@@ -39,6 +39,9 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [zipNote, setZipNote] = useState<string | null>(null);
   const [holdPanel, setHoldPanel] = useState(false);
   const [localThoughts, setLocalThoughts] = useState('');
+  const [appendBusy, setAppendBusy] = useState(false);
+  const [pendingExtra, setPendingExtra] = useState(0);
+  const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
   const thoughtText = [thoughts, localThoughts].filter(Boolean).join('\n\n');
@@ -92,7 +95,27 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     setHoldPanel(false);
   }, [holdPanel, generating, project.versions, loadedUrls]);
 
+  // Extra versions: keep A/B as finished previews; only wait on the new cards.
+  useEffect(() => {
+    if (!appendBusy) return;
+    if (busy) return;
+    const extras = project.versions.filter((version) => version.position >= appendFromRef.current);
+    if (extras.length === 0) {
+      setAppendBusy(false);
+      setPendingExtra(0);
+      return;
+    }
+    const settled = extras.every((version) => {
+      if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] !== undefined;
+      return Boolean(version.imageError);
+    });
+    if (!settled) return;
+    setAppendBusy(false);
+    setPendingExtra(0);
+  }, [appendBusy, busy, project.versions, loadedUrls]);
+
   const showCreating = generating || holdPanel;
+  const stillNeeded = appendBusy ? Math.max(0, appendFromRef.current + pendingExtra - project.versions.length) : 0;
   const imagesSettled = project.versions.length > 0 && project.versions.every((version) => {
     if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] !== undefined;
     return Boolean(version.imageError);
@@ -186,6 +209,20 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     return next;
   }
 
+  function requestAdd(count: number) {
+    appendFromRef.current = project.versions.length;
+    setPendingExtra(count);
+    setAppendBusy(true);
+    onAdd(count);
+  }
+
+  function extraPending(version: VersionDTO): boolean {
+    if (!appendBusy) return false;
+    if (version.position < appendFromRef.current) return false;
+    if (isHttpsUrl(version.imageUrl)) return loadedUrls[version.imageUrl] === undefined;
+    return !version.imageError;
+  }
+
   function plannedLetters(count: number): string {
     const start = project.versions.length;
     const names = Array.from({ length: count }, (_, index) => letter(start + index));
@@ -263,9 +300,16 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       <strong>Version {letter(version.position)}</strong>
                       <span>{version.size.replace('x', '×')}</span>
                     </div>
-                    <canvas ref={(node) => { canvasRefs.current[version.id] = node; }} />
+                    {extraPending(version) ? (
+                      <div className="preview-wait" role="status" aria-label={`Version ${letter(version.position)} is still rendering`}>
+                        <span className="ad-spinner" aria-hidden="true" />
+                        <span className="preview-wait-label">Rendering…</span>
+                      </div>
+                    ) : (
+                      <canvas ref={(node) => { canvasRefs.current[version.id] = node; }} />
+                    )}
                     <div className="vcopy">{version.primary}</div>
-                    <div className="hint" style={{ marginTop: 6 }}>{imageState(version)}</div>
+                    <div className="hint" style={{ marginTop: 6 }}>{extraPending(version) ? 'Same quality as A and B — still drawing…' : imageState(version)}</div>
                     <label htmlFor={`edit-${version.id}`} className="hint" style={{ display: 'block', marginTop: 8 }}>What should change? Nano Banana Pro edits this image only.</label>
                     <textarea
                       id={`edit-${version.id}`}
@@ -279,17 +323,35 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       type="button"
                       className="btn sm"
                       style={{ marginTop: 8 }}
-                      disabled={busy || (edits[version.id] ?? '').trim() === ''}
+                      disabled={busy || appendBusy || (edits[version.id] ?? '').trim() === ''}
                       onClick={(e) => { e.stopPropagation(); onImage(version.id, edits[version.id] ?? ''); }}
                     >
-                      {busy ? 'Working…' : 'Update this image'}
+                      {busy && !appendBusy ? 'Working…' : 'Update this image'}
                     </button>
                     <div className="vactions">
-                      <button type="button" disabled={!imageReady(version) || busy} onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
+                      <button type="button" disabled={!imageReady(version) || busy || appendBusy} onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
                     </div>
                   </div>
                 ))}
+                {Array.from({ length: stillNeeded }, (_, index) => {
+                  const position = project.versions.length + index;
+                  return (
+                    <div key={`pending-${position}`} className="vcard">
+                      <div className="vhead"><strong>Version {letter(position)}</strong></div>
+                      <div className="preview-wait" role="status" aria-label={`Version ${letter(position)} is still rendering`}>
+                        <span className="ad-spinner" aria-hidden="true" />
+                        <span className="preview-wait-label">Rendering…</span>
+                      </div>
+                      <div className="hint" style={{ marginTop: 6 }}>Same format and quality as A and B.</div>
+                    </div>
+                  );
+                })}
               </div>
+              {appendBusy && (
+                <p className="hint creating-live" style={{ marginTop: 12 }}>
+                  Adding more versions — A and B stay as they are. Only the new cards show a loader.
+                </p>
+              )}
               <div className="more-row">
                 <div>
                   <label htmlFor="moreCount">How many more versions?</label>
@@ -300,12 +362,12 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     autoComplete="off"
                     placeholder="4"
                     value={moreText}
-                    disabled={busy || room === 0}
+                    disabled={busy || appendBusy || room === 0}
                     onChange={(e) => setMoreText(e.target.value.replace(/\D/g, '').slice(0, 2))}
                   />
                 </div>
-                <button type="button" className="btn sm" disabled={busy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) onAdd(count); }}>
-                  {busy ? 'Working…' : typedCount() === null ? 'Generate' : `Generate ${typedCount()}`}
+                <button type="button" className="btn sm" disabled={busy || appendBusy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) requestAdd(count); }}>
+                  {appendBusy ? 'Adding…' : typedCount() === null ? 'Generate' : `Generate ${typedCount()}`}
                 </button>
               </div>
               <p className="hint">
