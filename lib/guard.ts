@@ -151,6 +151,21 @@ export interface VersionPatch {
   c2?: string;
   c3?: string;
   size?: string;
+  headlineX?: number | null;
+  headlineY?: number | null;
+  subX?: number | null;
+  subY?: number | null;
+  ctaX?: number | null;
+  ctaY?: number | null;
+  showHeadline?: boolean;
+  showSub?: boolean;
+  showCta?: boolean;
+}
+
+function cleanCoord(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(1, Math.max(0, value));
 }
 
 export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
@@ -158,7 +173,7 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if ('headline' in body) patch.headline = cleanText(body.headline, MAX_SHORT);
   if ('sub' in body) patch.sub = cleanText(body.sub, MAX_SHORT);
   if ('primary' in body) patch.primary = cleanText(body.primary, MAX_TEXT);
-  if ('cta' in body) patch.cta = cleanText(body.cta, 80) || 'Get started';
+  if ('cta' in body) patch.cta = cleanText(body.cta, 80);
   if ('layout' in body && typeof body.layout === 'string' && (LAYOUTS as readonly string[]).includes(body.layout)) {
     patch.layout = body.layout as Layout;
   }
@@ -171,6 +186,21 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if ('size' in body && typeof body.size === 'string' && (SIZES as readonly string[]).includes(body.size)) {
     patch.size = body.size;
   }
+  const hx = cleanCoord(body.headlineX);
+  const hy = cleanCoord(body.headlineY);
+  const sx = cleanCoord(body.subX);
+  const sy = cleanCoord(body.subY);
+  const cx = cleanCoord(body.ctaX);
+  const cy = cleanCoord(body.ctaY);
+  if (hx !== undefined) patch.headlineX = hx;
+  if (hy !== undefined) patch.headlineY = hy;
+  if (sx !== undefined) patch.subX = sx;
+  if (sy !== undefined) patch.subY = sy;
+  if (cx !== undefined) patch.ctaX = cx;
+  if (cy !== undefined) patch.ctaY = cy;
+  if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
+  if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;
+  if (typeof body.showCta === 'boolean') patch.showCta = body.showCta;
   return patch;
 }
 

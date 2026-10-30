@@ -43,6 +43,15 @@ export interface VersionDTO {
   imageUrl: string | null;
   imagePrompt: string | null;
   imageError: string | null;
+  headlineX: number | null;
+  headlineY: number | null;
+  subX: number | null;
+  subY: number | null;
+  ctaX: number | null;
+  ctaY: number | null;
+  showHeadline: boolean;
+  showSub: boolean;
+  showCta: boolean;
 }
 
 export interface ProjectDTO {

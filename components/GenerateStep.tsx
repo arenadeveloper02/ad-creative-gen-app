@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { positionPatch, resolveTextBoxes, type TextKind } from '@/lib/ad-layout';
 import { drawAd } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { SIZES } from '@/lib/platforms';
@@ -74,14 +75,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
       imageCache.current[url] = img;
     }
   }, [project.versions]);
-
-  useEffect(() => {
-    for (const version of project.versions) {
-      const canvas = canvasRefs.current[version.id];
-      const image = isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null;
-      if (canvas) drawAd(canvas, version, project.brandName, image);
-    }
-  }, [project.versions, project.brandName, loadedUrls]);
 
   useEffect(() => {
     if (!holdPanel || generating) return;
@@ -306,10 +299,24 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                         <span className="preview-wait-label">Rendering…</span>
                       </div>
                     ) : (
-                      <canvas ref={(node) => { canvasRefs.current[version.id] = node; }} />
+                      <AdStage
+                        version={version}
+                        brand={project.brandName}
+                        image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
+                        active={version.id === active.id}
+                        onCanvas={(node) => { canvasRefs.current[version.id] = node; }}
+                        onMove={(kind, x, y, width, height) => {
+                          if (version.id !== active.id) setActiveId(version.id);
+                          onPatch({ ...version, ...positionPatch(kind, x, y, width, height) });
+                        }}
+                      />
                     )}
                     <div className="vcopy">{version.primary}</div>
-                    <div className="hint" style={{ marginTop: 6 }}>{extraPending(version) ? 'Same quality as A and B — still drawing…' : imageState(version)}</div>
+                    <div className="hint" style={{ marginTop: 6 }}>
+                      {extraPending(version)
+                        ? 'Same quality as A and B — still drawing…'
+                        : `${imageState(version)}. Drag headline, subline, or CTA on the preview to move them.`}
+                    </div>
                     <label htmlFor={`edit-${version.id}`} className="hint" style={{ display: 'block', marginTop: 8 }}>What should change? Nano Banana Pro edits this image only.</label>
                     <textarea
                       id={`edit-${version.id}`}
@@ -400,12 +407,34 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
             <div>
               {thoughtText && <ThoughtChain text={thoughtText} thinking={false} />}
               <h4>Modify version {letter(active.position)}</h4>
+              <p className="hint">Rename here. Drag on the preview to move. Subline is optional.</p>
               <label htmlFor="mHeadline">Headline</label>
-              <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value })} />
-              <label htmlFor="mSub">Subline</label>
-              <input id="mSub" type="text" value={active.sub} onChange={(e) => patch({ sub: e.target.value })} />
+              <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value, showHeadline: true })} />
+              <div className="text-toggle-row">
+                <button type="button" className="btn ghost sm" disabled={active.showHeadline === false} onClick={() => patch({ showHeadline: false })}>Remove from ad</button>
+                <button type="button" className="btn ghost sm" disabled={active.showHeadline !== false || active.headline.trim() === ''} onClick={() => patch({ showHeadline: true })}>Show on ad</button>
+              </div>
+              <label htmlFor="mSub">Subline (optional)</label>
+              <input
+                id="mSub"
+                type="text"
+                value={active.sub}
+                placeholder="Leave blank if you do not want a subline"
+                onChange={(e) => {
+                  const sub = e.target.value;
+                  patch({ sub, showSub: sub.trim() !== '' ? true : active.showSub });
+                }}
+              />
+              <div className="text-toggle-row">
+                <button type="button" className="btn ghost sm" disabled={active.showSub === false || active.sub.trim() === ''} onClick={() => patch({ showSub: false })}>Remove from ad</button>
+                <button type="button" className="btn ghost sm" disabled={active.showSub !== false || active.sub.trim() === ''} onClick={() => patch({ showSub: true })}>Show on ad</button>
+              </div>
               <label htmlFor="mCta">CTA button</label>
-              <input id="mCta" type="text" value={active.cta} onChange={(e) => patch({ cta: e.target.value })} />
+              <input id="mCta" type="text" value={active.cta} onChange={(e) => patch({ cta: e.target.value, showCta: e.target.value.trim() !== '' })} />
+              <div className="text-toggle-row">
+                <button type="button" className="btn ghost sm" disabled={active.showCta === false} onClick={() => patch({ showCta: false })}>Remove from ad</button>
+                <button type="button" className="btn ghost sm" disabled={active.showCta !== false || active.cta.trim() === ''} onClick={() => patch({ showCta: true })}>Show on ad</button>
+              </div>
               <label htmlFor="mPrimary">Primary text</label>
               <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
               <label htmlFor="mLayout">Layout</label>
@@ -444,6 +473,133 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AdStage({
+  version,
+  brand,
+  image,
+  active,
+  onCanvas,
+  onMove,
+}: {
+  version: VersionDTO;
+  brand: string;
+  image: HTMLImageElement | null | undefined;
+  active: boolean;
+  onCanvas: (node: HTMLCanvasElement | null) => void;
+  onMove: (kind: TextKind, x: number, y: number, width: number, height: number) => void;
+}) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number } | null>(null);
+  const [frame, setFrame] = useState({ sw: 1, sh: 1, cw: 1, ch: 1 });
+  const [dragLive, setDragLive] = useState<{ kind: TextKind; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const painted = dragLive
+      ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, canvas.width || 1, canvas.height || 1) }
+      : version;
+    drawAd(canvas, painted, brand, image);
+    const stage = stageRef.current;
+    if (!stage) return;
+    const sync = () => {
+      const rect = stage.getBoundingClientRect();
+      setFrame({ sw: rect.width, sh: rect.height, cw: canvas.width || 1, ch: canvas.height || 1 });
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, [version, brand, image, dragLive]);
+
+  const boxes = resolveTextBoxes(
+    dragLive
+      ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, frame.cw, frame.ch) }
+      : version,
+  );
+  const scaleX = frame.sw / frame.cw;
+  const scaleY = frame.sh / frame.ch;
+
+  function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const box = boxes.find((item) => item.kind === kind);
+    if (!box) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    dragRef.current = {
+      kind,
+      ox: event.clientX - rect.left - box.x * scaleX,
+      oy: event.clientY - rect.top - box.y * scaleY,
+      x: box.x,
+      y: box.y,
+    };
+    setDragLive({ kind, x: box.x, y: box.y });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    const stage = stageRef.current;
+    if (!drag || !stage) return;
+    const rect = stage.getBoundingClientRect();
+    const x = Math.min(frame.cw - 8, Math.max(0, (event.clientX - rect.left - drag.ox) / scaleX));
+    const y = Math.min(frame.ch - 8, Math.max(0, (event.clientY - rect.top - drag.oy) / scaleY));
+    drag.x = x;
+    drag.y = y;
+    setDragLive({ kind: drag.kind, x, y });
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (drag) {
+      onMove(drag.kind, drag.x, drag.y, frame.cw, frame.ch);
+      dragRef.current = null;
+      setDragLive(null);
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // Capture may already be released.
+      }
+    }
+  }
+
+  return (
+    <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}`}>
+      <canvas
+        ref={(node) => {
+          canvasRef.current = node;
+          onCanvas(node);
+        }}
+      />
+      {boxes.map((box) => (
+        <div
+          key={box.kind}
+          className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}`}
+          style={{
+            left: box.x * scaleX,
+            top: box.y * scaleY,
+            width: Math.max(box.w * scaleX, 48),
+            height: Math.max(box.h * scaleY, 28),
+          }}
+          onPointerDown={(event) => onPointerDown(box.kind, event)}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onClick={(event) => event.stopPropagation()}
+          role="button"
+          tabIndex={0}
+          aria-label={`Move ${box.kind}`}
+        >
+          <span>{box.kind === 'headline' ? 'Headline' : box.kind === 'sub' ? 'Subline' : 'CTA'}</span>
+        </div>
+      ))}
     </div>
   );
 }

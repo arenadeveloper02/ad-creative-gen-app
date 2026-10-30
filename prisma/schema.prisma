@@ -109,6 +109,16 @@ model AdVersion {
   imagePrompt String?
   imageModel  String?
   imageError  String?
+  // Normalized 0–1 positions for on-image text. Null means use the layout default.
+  headlineX    Float?
+  headlineY    Float?
+  subX         Float?
+  subY         Float?
+  ctaX         Float?
+  ctaY         Float?
+  showHeadline Boolean  @default(true)
+  showSub      Boolean  @default(true)
+  showCta      Boolean  @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

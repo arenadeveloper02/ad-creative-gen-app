@@ -1,3 +1,4 @@
+import { resolveTextBoxes } from '@/lib/ad-layout';
 import type { VersionDTO } from '@/lib/types';
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
@@ -17,13 +18,6 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string
   return lines;
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return [10, 12, 24];
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
 function coverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number): void {
   const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
   const dw = image.naturalWidth * scale;
@@ -40,12 +34,10 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const pad = Math.round(width * 0.08);
-  const maxW = width - pad * 2;
   const hasImage = !!image && image.complete && image.naturalWidth > 0;
 
   if (hasImage) {
     coverImage(ctx, image, width, height);
-    // Neutral shade so the headline stays readable without recolouring the photo.
     const [r, g, b] = [12, 16, 28];
     const scrim = version.layout === 'bottom'
       ? ctx.createLinearGradient(0, height * 0.45, 0, height)
@@ -86,61 +78,51 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   ctx.textAlign = 'left';
   ctx.fillText((brand || 'Your brand').toUpperCase().slice(0, 40), pad, pad + Math.round(width * 0.03));
 
+  const boxes = resolveTextBoxes(version);
   const hSize = Math.round(width * (version.layout === 'bottom' ? 0.085 : 0.098));
   const sSize = Math.round(width * 0.042);
-  ctx.font = `bold ${hSize}px Arial`;
-  const hLines = wrap(ctx, version.headline || 'Headline', maxW).slice(0, 4);
-  const sLines = wrap(ctx, version.sub || '', maxW).slice(0, 3);
-  const blockH = hLines.length * hSize * 1.12 + (sLines.length ? sLines.length * sSize * 1.3 + hSize * 0.4 : 0);
+  const alignCenter = version.layout === 'center' && version.headlineX == null;
 
-  let y: number;
-  let x = pad;
-  if (version.layout === 'center') {
-    ctx.textAlign = 'center';
-    x = width / 2;
-    y = (height - blockH) / 2 + hSize;
-  } else if (version.layout === 'bottom') {
-    y = height - pad - blockH - Math.round(width * 0.14);
-  } else {
-    y = height * 0.42;
-  }
-
-  if (version.layout === 'bottom') {
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = version.bg === 'light' ? '#FFFFFF' : '#000000';
-    ctx.fillRect(0, y - hSize * 1.3, width, blockH + Math.round(width * 0.22));
-    ctx.globalAlpha = 1;
-  }
-
-  ctx.fillStyle = ink;
-  ctx.font = `bold ${hSize}px Arial`;
-  for (const line of hLines) {
-    ctx.fillText(line, x, y);
-    y += hSize * 1.12;
-  }
-  if (sLines.length) {
-    y += hSize * 0.2;
-    ctx.font = `${sSize}px Arial`;
-    ctx.globalAlpha = 0.9;
-    for (const line of sLines) {
-      ctx.fillText(line, x, y);
-      y += sSize * 1.3;
+  for (const box of boxes) {
+    if (box.kind === 'headline') {
+      ctx.font = `bold ${hSize}px Arial`;
+      const lines = wrap(ctx, version.headline.trim(), box.w).slice(0, 4);
+      ctx.textAlign = alignCenter ? 'center' : 'left';
+      ctx.fillStyle = ink;
+      let y = box.y + hSize;
+      const x = alignCenter ? box.x + box.w / 2 : box.x;
+      for (const line of lines) {
+        ctx.fillText(line, x, y);
+        y += hSize * 1.12;
+      }
+    } else if (box.kind === 'sub') {
+      ctx.font = `${sSize}px Arial`;
+      const lines = wrap(ctx, version.sub.trim(), box.w).slice(0, 3);
+      ctx.textAlign = alignCenter && version.subX == null ? 'center' : 'left';
+      ctx.fillStyle = ink;
+      ctx.globalAlpha = 0.9;
+      let y = box.y + sSize;
+      const x = alignCenter && version.subX == null ? box.x + box.w / 2 : box.x;
+      for (const line of lines) {
+        ctx.fillText(line, x, y);
+        y += sSize * 1.3;
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      const cta = version.cta.trim();
+      ctx.font = `600 ${Math.round(width * 0.036)}px Arial`;
+      const tw = ctx.measureText(cta).width;
+      const bw = Math.min(box.w, tw + width * 0.09);
+      const bh = box.h;
+      const bx = box.x;
+      const by = box.y;
+      ctx.fillStyle = version.bg === 'light' ? version.c1 : version.c3;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, bh / 2);
+      ctx.fill();
+      ctx.fillStyle = version.bg === 'light' ? '#FFFFFF' : version.c1;
+      ctx.textAlign = 'center';
+      ctx.fillText(cta, bx + bw / 2, by + bh * 0.66);
     }
-    ctx.globalAlpha = 1;
   }
-
-  const cta = version.cta || 'Learn more';
-  ctx.font = `600 ${Math.round(width * 0.036)}px Arial`;
-  const tw = ctx.measureText(cta).width;
-  const bw = tw + width * 0.09;
-  const bh = width * 0.095;
-  const bx = version.layout === 'center' ? (width - bw) / 2 : pad;
-  const by = y + width * 0.03;
-  ctx.fillStyle = version.bg === 'light' ? version.c1 : version.c3;
-  ctx.beginPath();
-  ctx.roundRect(bx, by, bw, bh, bh / 2);
-  ctx.fill();
-  ctx.fillStyle = version.bg === 'light' ? '#FFFFFF' : version.c1;
-  ctx.textAlign = 'center';
-  ctx.fillText(cta, bx + bw / 2, by + bh * 0.66);
 }
