@@ -216,8 +216,8 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         <p className="sub">Start with the product, the goal, and your brand rules. Choose a saved brand profile or upload new brand assets.</p>
 
         <label htmlFor="desc">Describe the ad you want</label>
-        <textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. A bright white clinic, warm daylight, light wood desk. Founders booking a dental visit. Do not make the room blue." />
-        <p className="hint">Write the picture here. This is what the image follows. Brand colors stay as small accents.</p>
+        <textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Two founders in a glass office reviewing a sales dashboard. Clean daylight, no clutter. Keep professional navy blue on the screen and suits, or brand red on the logo and one accent." />
+        <p className="hint">Write the picture here. This is what the image follows. Say professional blue or red if that is the brand colour you want kept.</p>
 
         <label htmlFor="goal">What should this ad achieve?</label>
         <select id="goal" value={goal} onChange={(e) => setGoal(e.target.value)}>

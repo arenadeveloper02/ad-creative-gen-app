@@ -56,14 +56,14 @@ const VARIANT_NOTES = [
 export function buildImagePrompt(input: ImagePromptInput): string {
   const product = input.product || input.brandName || 'the product';
   const lines: string[] = [];
-  lines.push(`Advertising image for ${product}${input.brandName ? ` by ${input.brandName}` : ''}.`);
-  if (input.description) lines.push(`What the user wants: ${input.description}. Follow this for the message and for the picture: setting, background, and lighting.`);
+  lines.push(`Professional B2B advertising photograph for ${product}${input.brandName ? ` by ${input.brandName}` : ''}. Credible, polished, and made for a business buyer.`);
+  if (input.description) lines.push(`What the user wants: ${input.description}. Follow this for the offer and for the picture: people, setting, background, and lighting.`);
   if (input.sceneNote) lines.push(`Scene the user asked for: ${input.sceneNote}. This controls the setting, background, and lighting.`);
   lines.push(`Campaign goal: ${input.goal}. Platform: ${input.platform}, ${input.format} placement.`);
-  if (input.audience) lines.push(`Audience: ${input.audience}.`);
+  if (input.audience) lines.push(`Audience: ${input.audience}. Show working professionals, not a consumer lifestyle.`);
   lines.push(`Visual style: ${STYLE_NOTES[input.visualStyle] ?? input.visualStyle}.`);
   lines.push(`Mood: ${TONE_NOTES[input.tone] ?? input.tone}.`);
-  lines.push(`Brand colours ${input.c1}, ${input.c2}, and ${input.c3} may appear only as small accents. Do not tint the whole room, clothes, or background with them unless the scene note asks for that.`);
+  lines.push(`Brand colours ${input.c1}, ${input.c2}, and ${input.c3} are the professional palette. Keep them. If they read as blue, use a corporate navy or blue. If they read as red, use a strong brand red. Put that colour on the product interface, logo area, clothing accents, and graphic shapes so the ad looks like a finished B2B campaign. Do not flatten the whole room into one tint.`);
   lines.push(`Composition: ${LAYOUT_NOTES[input.layout]}. ${VARIANT_NOTES[input.variant % VARIANT_NOTES.length]}.`);
   if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives.');
   if (input.hasLogo) lines.push('The attached logo is the brand mark; place it small and legible, never distorted.');
