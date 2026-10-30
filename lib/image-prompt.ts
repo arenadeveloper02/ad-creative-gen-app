@@ -57,7 +57,7 @@ export function buildImagePrompt(input: ImagePromptInput): string {
   const product = input.product || input.brandName || 'the product';
   const lines: string[] = [];
   lines.push(`Advertising image for ${product}${input.brandName ? ` by ${input.brandName}` : ''}.`);
-  if (input.description) lines.push(`Brief: ${input.description}`);
+  if (input.description) lines.push(`What the user wants: ${input.description}. Follow this for the message and for the picture: setting, background, and lighting.`);
   if (input.sceneNote) lines.push(`Scene the user asked for: ${input.sceneNote}. This controls the setting, background, and lighting.`);
   lines.push(`Campaign goal: ${input.goal}. Platform: ${input.platform}, ${input.format} placement.`);
   if (input.audience) lines.push(`Audience: ${input.audience}.`);

@@ -216,7 +216,8 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         <p className="sub">Start with the product, the goal, and your brand rules. Choose a saved brand profile or upload new brand assets.</p>
 
         <label htmlFor="desc">Describe the ad you want</label>
-        <textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Key message, offer, must-have visuals, things to avoid..." />
+        <textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. A bright white clinic, warm daylight, light wood desk. Founders booking a dental visit. Do not make the room blue." />
+        <p className="hint">Write the picture here. This is what the image follows. Brand colors stay as small accents.</p>
 
         <label htmlFor="goal">What should this ad achieve?</label>
         <select id="goal" value={goal} onChange={(e) => setGoal(e.target.value)}>
@@ -327,9 +328,6 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                   </div>
                 </div>
               </div>
-          <label htmlFor="sceneNote">Describe what you want</label>
-          <textarea id="sceneNote" value={sceneNote} onChange={(e) => setSceneNote(e.target.value)} placeholder="e.g. A bright white clinic, warm daylight, light wood desk. Do not make the room blue." />
-          <p className="hint">This sets the picture. The colour chips stay as small accents, not the whole background.</p>
           <label htmlFor="guidelineUrl">Guidelines link (optional)</label>
           <input id="guidelineUrl" type="url" value={guidelineUrl} onChange={(e) => setGuidelineUrl(e.target.value)} placeholder="https://brand.example.com" />
           {status && <p className={`status-line ${statusKind}`}>{status}</p>}
