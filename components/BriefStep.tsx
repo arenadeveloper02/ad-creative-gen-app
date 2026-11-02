@@ -114,8 +114,13 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const [lookingUp, setLookingUp] = useState(false);
   const lastLookupKey = useRef('');
   const lookupAbort = useRef(0);
+  /** True once the user types the product themselves; AI then leaves it alone. */
+  const productTouched = useRef(project?.product ? true : false);
+  /** Files the last AI fill added, so a new company replaces them instead of piling up. */
+  const aiAssetIds = useRef<Set<string>>(new Set());
 
-  const selected = brandMode === 'existing' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
+  // In AI mode the auto-saved profile stays linked while the user keeps typing new companies.
+  const selected = brandMode !== 'manual' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
   const isNew = brandMode !== 'existing';
   const isAi = brandMode === 'ai';
 
@@ -222,7 +227,10 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
     lastLookupKey.current = key;
     const nextBrand = typeof data.brandName === 'string' && data.brandName.trim() !== '' ? data.brandName : name;
-    const nextProduct = typeof data.product === 'string' && data.product.trim() !== '' && product.trim() === '' ? data.product : product;
+    const aiProduct = typeof data.product === 'string' && data.product.trim() !== '' ? data.product : '';
+    // Replace the product line unless the user wrote it themselves.
+    const nextProduct = aiProduct && (!productTouched.current || product.trim() === '') ? aiProduct : product;
+    if (aiProduct && nextProduct === aiProduct) productTouched.current = false;
     const nextC1 = typeof data.c1 === 'string' ? data.c1 : c1;
     const nextC2 = typeof data.c2 === 'string' ? data.c2 : c2;
     const nextC3 = typeof data.c3 === 'string' ? data.c3 : c3;
@@ -233,9 +241,13 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setC2(nextC2);
     setC3(nextC3);
     const found = Array.isArray(data.assets) ? data.assets.filter((item) => item && typeof item.id === 'string') : [];
-    const ids = new Set(assets.map((item) => item.id));
-    const nextAssets = [...assets, ...found.filter((item) => !ids.has(item.id))];
-    if (found.length > 0) setAssets(nextAssets);
+    // Drop what the previous AI fill added (a different company), keep anything the user uploaded.
+    const kept = assets.filter((item) => !aiAssetIds.current.has(item.id));
+    const ids = new Set(kept.map((item) => item.id));
+    const fresh = found.filter((item) => !ids.has(item.id));
+    const nextAssets = [...kept, ...fresh];
+    aiAssetIds.current = new Set(fresh.map((item) => item.id));
+    setAssets(nextAssets);
 
     const counts = data.counts ?? {};
     const bits: string[] = [];
@@ -258,6 +270,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         c3: nextC3,
         assetIds: nextAssets.map((item) => item.id),
         overwrite: true,
+        stayInAiMode: true,
       });
       if (saved) {
         setStatus(`Brand filled with AI and saved as profile "${saved.name}".${filled}${fontNote}${summary}`);
@@ -360,6 +373,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     c3: string;
     assetIds: string[];
     overwrite: boolean;
+    stayInAiMode?: boolean;
   }): Promise<ProfileDTO | null> {
     if (input.name === '') {
       setStatus('Enter a name for the profile.');
@@ -369,7 +383,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const res = await fetch('/api/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...input, guidelineUrl: '' }),
+      body: JSON.stringify({ ...input, stayInAiMode: undefined, guidelineUrl: '' }),
     });
     const parsed = await readJson(res);
     if (!parsed.ok) {
@@ -381,9 +395,10 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const saved = parsed.data as ProfileDTO;
     const next = [...profiles.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name));
     onProfiles(next);
-    setBrandMode('existing');
+    if (!input.stayInAiMode) setBrandMode('existing');
     setProfileId(saved.id);
     setAssets(saved.assets);
+    aiAssetIds.current = new Set(saved.assets.map((item) => item.id));
     setOverwrite(false);
     return saved;
   }
@@ -535,24 +550,47 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
           <div className="row">
             <div>
               <label htmlFor="brand">Brand / company name</label>
-              <input
-                id="brand"
-                type="text"
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-                onBlur={() => {
-                  if (isAi && brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                }}
-                placeholder="e.g. Gentle Dental"
-                disabled={lookingUp}
-              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                <input
+                  id="brand"
+                  type="text"
+                  style={{ flex: 1, minWidth: 0 }}
+                  value={brandName}
+                  onChange={(e) => setBrandName(e.target.value)}
+                  onBlur={() => {
+                    if (isAi && brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  placeholder="e.g. Gentle Dental"
+                  disabled={lookingUp}
+                />
+                {isAi && (
+                  <button
+                    type="button"
+                    className="btn sm"
+                    style={{ whiteSpace: 'nowrap', alignSelf: 'center' }}
+                    disabled={lookingUp || uploading || brandName.trim().length < 2}
+                    onClick={() => void fillBrandWithAi(true)}
+                  >
+                    {lookingUp ? 'Filling…' : 'Fill with AI'}
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <label htmlFor="product">Product or service</label>
-              <input id="product" type="text" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Arena AI workflow platform" />
+              <input
+                id="product"
+                type="text"
+                value={product}
+                onChange={(e) => {
+                  productTouched.current = true;
+                  setProduct(e.target.value);
+                }}
+                placeholder="e.g. Arena AI workflow platform"
+              />
             </div>
           </div>
 
