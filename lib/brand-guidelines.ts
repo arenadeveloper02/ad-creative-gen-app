@@ -30,7 +30,31 @@ const MAX_LOGO = 2 * 1024 * 1024;
 const MAX_REF = 4 * 1024 * 1024;
 const MAX_FONT = 3 * 1024 * 1024;
 const MAX_DOC = MAX_BYTES;
-const MAX_LOGOS = 3;
+const MAX_LOGOS = 6;
+const WELL_KNOWN_LOGO_PATHS = [
+  '/favicon.svg',
+  '/logo.svg',
+  '/logo.png',
+  '/logo-white.svg',
+  '/images/logo.svg',
+  '/images/logo.png',
+  '/img/logo.svg',
+  '/img/logo.png',
+  '/assets/logo.svg',
+  '/assets/logo.png',
+  '/assets/images/logo.svg',
+  '/assets/img/logo.svg',
+  '/static/logo.svg',
+  '/static/images/logo.svg',
+  '/safari-pinned-tab.svg',
+];
+
+export type LogoVariant = 'Primary' | 'Reverse (white)' | 'Icon' | 'Stacked' | 'Mono' | 'Alternate';
+type LogoZone = 'header' | 'footer' | 'body' | 'icon' | 'inline' | 'meta' | 'wellknown' | 'external';
+interface LogoMeta {
+  hint: string;
+  zone: LogoZone;
+}
 const MAX_FONTS = 4;
 const MAX_REFS = 6;
 const MAX_DOCS = 2;
@@ -56,7 +80,7 @@ const GUIDE_SYSTEM = [
   '{"brandName":"","product":"","website":"","c1":"#RRGGBB","c2":"#RRGGBB","c3":"#RRGGBB","summary":"","logoUrls":[],"fontNames":[],"refUrls":[],"headlineFont":""}',
   'c1 is the primary brand colour, c2 secondary, c3 accent or light contrast for text/logo. Use real #RRGGBB values seen on the site when available; prefer distinctive brand colours over greys, pure black, or generic blue.',
   'product is a short product or service line (under 80 characters). summary is one sentence on tone and visual style (under 240 characters).',
-  'logoUrls: up to 3 URLs from the candidates most likely to be this brand\'s own logo, best first. Exclude client, partner, award, app-store and social logos, and photos. Header logo URLs usually come first in the list.',
+  'logoUrls: up to 6 URLs from the candidates that are this brand\'s own logo in any variant (full colour, white/reverse, icon mark, stacked, mono), best first. Exclude client, partner, award, app-store and social logos, and photos. Header and footer zones are the most reliable.',
   'refUrls: up to 6 candidate image URLs that are real marketing visuals / hero creatives, best first.',
   'fontNames: brand font family names seen in the CSS, primary first. headlineFont is the single best headline font name.',
   'Only use URLs that appear in the candidates. Do not invent prices, awards, or customer counts.',
@@ -68,6 +92,7 @@ export interface BrandAssetPart {
   mimeType: string;
   data: Buffer;
   sourceUrl: string | null;
+  variant?: LogoVariant;
 }
 
 export interface BrandGuidelinesResult {
@@ -92,7 +117,10 @@ export interface Hunt {
   text: string;
   colors: string[];
   logoCandidates: string[];
+  logoMeta: Map<string, LogoMeta>;
   inlineSvgLogos: Buffer[];
+  inlineSvgZones: LogoZone[];
+  brandTokens: string[];
   imageCandidates: string[];
   fontCandidates: string[];
   fontNames: string[];
@@ -384,7 +412,10 @@ function emptyHunt(): Hunt {
     text: '',
     colors: [],
     logoCandidates: [],
+    logoMeta: new Map(),
     inlineSvgLogos: [],
+    inlineSvgZones: [],
+    brandTokens: [],
     imageCandidates: [],
     fontCandidates: [],
     fontNames: [],
@@ -414,8 +445,27 @@ function harvestCss(css: string, base: string, hunt: Hunt, rawColors: string[]):
   }
 }
 
+function addLogo(hunt: Hunt, url: string | null, hint: string, zone: LogoZone): void {
+  if (!url) return;
+  if (!hunt.logoCandidates.includes(url)) {
+    if (hunt.logoCandidates.length >= 60) return;
+    hunt.logoCandidates.push(url);
+  }
+  const prev = hunt.logoMeta.get(url);
+  // Keep the strongest zone seen for this URL.
+  const rank: Record<LogoZone, number> = { header: 6, inline: 6, footer: 5, meta: 4, icon: 3, wellknown: 3, body: 2, external: 1 };
+  if (!prev || rank[zone] > rank[prev.zone]) hunt.logoMeta.set(url, { hint: `${prev?.hint ?? ''} ${hint}`.trim(), zone });
+  else prev.hint = `${prev.hint} ${hint}`.trim();
+}
+
+function mentionsBrand(text: string, tokens: string[]): boolean {
+  const lower = text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return tokens.some((t) => lower.includes(t));
+}
+
 function harvestHtml(url: string, html: string, hunt: Hunt, rawColors: string[], primary: boolean): string[] {
   hunt.pages.push(url);
+  const isBrandPage = !primary;
   if (primary) {
     hunt.title = clip(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '', 160);
     hunt.description = clip(metaContent(html, ['description', 'og:description', 'twitter:description']), 400);
@@ -437,17 +487,21 @@ function harvestHtml(url: string, html: string, hunt: Hunt, rawColors: string[],
   const og = metaContent(html, ['og:image', 'og:image:url', 'og:image:secure_url', 'twitter:image', 'twitter:image:src']);
   if (og) pushUnique(hunt.imageCandidates, absoluteUrl(url, og));
   const ogLogo = metaContent(html, ['og:logo']);
-  if (ogLogo) pushUnique(hunt.logoCandidates, absoluteUrl(url, ogLogo));
+  if (ogLogo) addLogo(hunt, absoluteUrl(url, ogLogo), 'og:logo', 'meta');
 
   // JSON-LD "logo".
   for (const m of html.matchAll(/"logo"\s*:\s*(?:"([^"]+)"|{[^}]*"url"\s*:\s*"([^"]+)")/gi)) {
-    pushUnique(hunt.logoCandidates, absoluteUrl(url, m[1] ?? m[2] ?? ''));
+    addLogo(hunt, absoluteUrl(url, m[1] ?? m[2] ?? ''), 'json-ld logo', 'meta');
   }
 
   // <img> tags, ordered so header logos come first.
   const headerEnd = (() => {
     const i = html.search(/<\/header>|<main\b|<\/nav>/i);
     return i > 0 ? i : Math.min(html.length, 60_000);
+  })();
+  const footerStart = (() => {
+    const i = html.search(/<footer\b|class=["'][^"']*footer/i);
+    return i > 0 ? i : html.length;
   })();
   const imgRe = /<img\b[^>]*>/gi;
   let match: RegExpExecArray | null;
@@ -461,8 +515,12 @@ function harvestHtml(url: string, html: string, hunt: Hunt, rawColors: string[],
     const hint = `${src} ${alt} ${cls}`;
     if (ICON_JUNK_RE.test(hint) && !LOGO_RE.test(hint)) continue;
     const inHeader = match.index < headerEnd;
-    if (LOGO_RE.test(hint) || (inHeader && IMAGE_EXT_RE.test(src) && /svg|png/i.test(src))) {
-      pushUnique(hunt.logoCandidates, abs);
+    const inFooter = match.index >= footerStart;
+    const zone: LogoZone = inHeader ? 'header' : inFooter ? 'footer' : 'body';
+    const brandish = mentionsBrand(hint, hunt.brandTokens);
+    // On a press/brand page every same-site image that names the brand or says "logo" is a logo variant.
+    if (LOGO_RE.test(hint) || (inHeader && IMAGE_EXT_RE.test(src) && /svg|png/i.test(src)) || (isBrandPage && brandish && sameSite(abs, url))) {
+      addLogo(hunt, abs, hint, zone);
       continue;
     }
     const width = Number(attr(tag, 'width') || '0');
@@ -472,11 +530,27 @@ function harvestHtml(url: string, html: string, hunt: Hunt, rawColors: string[],
     pushUnique(hunt.imageCandidates, abs, 40);
   }
 
-  for (const icon of icons) pushUnique(hunt.logoCandidates, icon);
+  // Also <source srcset> and <picture> variants that swap a logo for dark mode.
+  const sourceRe = /<source\b[^>]*>/gi;
+  while ((match = sourceRe.exec(html))) {
+    const tag = match[0];
+    const media = attr(tag, 'media');
+    const srcset = firstSrcset(attr(tag, 'srcset') || attr(tag, 'data-srcset'));
+    const abs = absoluteUrl(url, srcset);
+    if (!abs) continue;
+    const near = html.slice(match.index, Math.min(html.length, match.index + 600));
+    const hint = `${srcset} ${media} ${attr(tag, 'class')}`;
+    if (LOGO_RE.test(hint) || LOGO_RE.test(near)) {
+      const zone: LogoZone = match.index < headerEnd ? 'header' : match.index >= footerStart ? 'footer' : 'body';
+      addLogo(hunt, abs, /dark/i.test(media) ? `${hint} dark-mode` : hint, zone);
+    }
+  }
+
+  for (const icon of icons) addLogo(hunt, icon, 'site icon', 'icon');
 
   // Inline SVG logos (the most "exact" source when a site inlines its mark).
   const svgRe = /<svg\b[\s\S]*?<\/svg>/gi;
-  while ((match = svgRe.exec(html)) && hunt.inlineSvgLogos.length < 3) {
+  while ((match = svgRe.exec(html)) && hunt.inlineSvgLogos.length < 4) {
     const svg = match[0];
     // Tiny inline SVGs next to a .logo wrapper are usually menu/search icons, not the mark.
     if (svg.length < 2500 || svg.length > 200_000) continue;
@@ -487,7 +561,9 @@ function harvestHtml(url: string, html: string, hunt: Hunt, rawColors: string[],
     const withNs = /xmlns=/.test(open) ? svg : svg.replace(/^<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
     const buf = Buffer.from(withNs, 'utf8');
     if (svgIsUnsafe(buf)) continue;
+    if (hunt.inlineSvgLogos.some((b) => b.equals(buf))) continue;
     hunt.inlineSvgLogos.push(buf);
+    hunt.inlineSvgZones.push(match.index < headerEnd ? 'header' : match.index >= footerStart ? 'footer' : 'inline');
   }
 
   // Background images in inline style attributes (hero banners).
@@ -518,19 +594,30 @@ function harvestHtml(url: string, html: string, hunt: Hunt, rawColors: string[],
 }
 
 /** Reads a brand site (home + brand/press page + stylesheets) and lists what could be pulled. Never throws. */
-export async function readBrandSite(site: string): Promise<Hunt | null> {
+export async function readBrandSite(site: string, brandName = ''): Promise<Hunt | null> {
   try {
-    return await readSite(site);
+    return await readSite(site, brandName);
   } catch {
     return null;
   }
 }
 
-async function readSite(site: string): Promise<Hunt | null> {
+function brandTokens(brandName: string, site: string): string[] {
+  const out = new Set<string>();
+  const host = hostOf(site).split('.')[0] ?? '';
+  if (host.length >= 3) out.add(host.replace(/[^a-z0-9]+/g, ''));
+  const words = brandName.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 3 && !/^(the|and|inc|llc|ltd|group|company|co)$/.test(w));
+  if (words.length) out.add(words.join(''));
+  for (const w of words) if (w.length >= 5) out.add(w);
+  return [...out];
+}
+
+async function readSite(site: string, brandName: string): Promise<Hunt | null> {
   const hunt = emptyHunt();
   const rawColors: string[] = [];
   const home = await fetchText(site, 'text/html,application/xhtml+xml', MAX_HTML, /text\/html|application\/xhtml/);
   if (!home.ok) return null;
+  hunt.brandTokens = brandTokens(brandName, home.finalUrl);
   const follow = harvestHtml(home.finalUrl, home.text, hunt, rawColors, true);
 
   const brandPages = follow.filter((f) => !f.startsWith('css:')).slice(0, 2);
@@ -556,12 +643,18 @@ async function readSite(site: string): Promise<Hunt | null> {
       if (res.ok) harvestCss(res.text, extraSheets[i], hunt, rawColors);
     });
   }
-  // CSS @import of font files.
   hunt.colors = rankColors(rawColors);
+  // Well-known logo paths many sites expose; checked at download time, cheap to list.
+  try {
+    const origin = new URL(home.finalUrl).origin;
+    for (const path of WELL_KNOWN_LOGO_PATHS) addLogo(hunt, `${origin}${path}`, path, 'wellknown');
+  } catch {
+    /* ignore */
+  }
   const host = hostOf(home.finalUrl);
   if (host) {
-    pushUnique(hunt.logoCandidates, `https://logo.clearbit.com/${host}`);
-    pushUnique(hunt.logoCandidates, `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=256`);
+    addLogo(hunt, `https://logo.clearbit.com/${host}`, 'clearbit', 'external');
+    addLogo(hunt, `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=256`, 'favicon service', 'external');
   }
   return hunt;
 }
@@ -581,7 +674,8 @@ function buildPrompt(brandName: string, hunt: Hunt | null, site: string | null):
   if (hunt.colors.length) lines.push(`Colours on site, most used first (greys down-ranked): ${hunt.colors.join(', ')}`);
   if (hunt.fontNames.length) lines.push(`Font families in CSS: ${hunt.fontNames.join(', ')}`);
   if (hunt.inlineSvgLogos.length) lines.push(`${hunt.inlineSvgLogos.length} inline SVG logo(s) were captured directly from the header.`);
-  if (hunt.logoCandidates.length) lines.push(`Logo URL candidates:\n${hunt.logoCandidates.slice(0, 20).map((u) => `- ${u}`).join('\n')}`);
+  const listed = hunt.logoCandidates.filter((u) => hunt.logoMeta.get(u)?.zone !== 'wellknown').slice(0, 24);
+  if (listed.length) lines.push(`Logo URL candidates (zone in brackets):\n${listed.map((u) => `- [${hunt.logoMeta.get(u)?.zone ?? 'body'}] ${u}`).join('\n')}`);
   if (hunt.imageCandidates.length) lines.push(`Marketing image candidates:\n${hunt.imageCandidates.slice(0, 25).map((u) => `- ${u}`).join('\n')}`);
   if (hunt.docCandidates.length) lines.push(`Brand kit documents found: ${hunt.docCandidates.join(', ')}`);
   if (hunt.text) lines.push(`Page text sample:\n${hunt.text}`);
@@ -663,6 +757,104 @@ async function downloadDoc(url: string): Promise<{ doc: BrandAssetPart; parts: E
   return { doc: { kind: 'guidelines', name, mimeType: mime, data: res.data, sourceUrl: res.finalUrl }, parts };
 }
 
+// ---------------------------------------------------------- logo variants
+
+function imageSize(mime: string, data: Buffer): { w: number; h: number } | null {
+  if (mime === 'image/png' && data.length > 24 && data[0] === 0x89) {
+    return { w: data.readUInt32BE(16), h: data.readUInt32BE(20) };
+  }
+  if (mime === 'image/svg+xml') {
+    const text = data.subarray(0, 4000).toString('utf8');
+    const open = text.match(/<svg\b[^>]*>/i)?.[0] ?? '';
+    const vb = attr(open, 'viewBox').split(/[\s,]+/).map(Number);
+    if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) return { w: vb[2], h: vb[3] };
+    const w = parseFloat(attr(open, 'width'));
+    const h = parseFloat(attr(open, 'height'));
+    if (w > 0 && h > 0) return { w, h };
+  }
+  if (mime === 'image/webp' && data.length > 30) {
+    const chunk = data.subarray(12, 16).toString('ascii');
+    if (chunk === 'VP8X') return { w: 1 + data.readUIntLE(24, 3), h: 1 + data.readUIntLE(27, 3) };
+    if (chunk === 'VP8 ') return { w: data.readUInt16LE(26) & 0x3fff, h: data.readUInt16LE(28) & 0x3fff };
+  }
+  if (mime === 'image/jpeg') {
+    let i = 2;
+    while (i + 9 < data.length) {
+      if (data[i] !== 0xff) break;
+      const marker = data[i + 1];
+      const len = data.readUInt16BE(i + 2);
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { h: data.readUInt16BE(i + 5), w: data.readUInt16BE(i + 7) };
+      }
+      i += 2 + len;
+    }
+  }
+  return null;
+}
+
+/** Share of SVG paint that is light (white-ish). 1 = all white marks, 0 = none. */
+function svgLightShare(data: Buffer): number | null {
+  const text = data.toString('utf8');
+  const paints: string[] = [];
+  for (const m of text.matchAll(/(?:fill|stroke|stop-color)\s*[:=]\s*["']?\s*(#[0-9a-f]{3,8}|white|black|rgba?\([^)]*\)|currentColor)/gi)) paints.push(m[1]);
+  const useful = paints.filter((p) => !/^currentColor$/i.test(p));
+  if (useful.length === 0) {
+    // Inline SVGs often inherit fill from CSS; treat `fill="#fff"` absence as unknown.
+    return null;
+  }
+  let light = 0;
+  for (const paint of useful) {
+    const p = paint.toLowerCase();
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (p === 'white') (r = g = b = 255);
+    else if (p === 'black') (r = g = b = 0);
+    else if (p.startsWith('#')) {
+      const hex = p.length <= 5 ? p.slice(1, 4).split('').map((c) => c + c).join('') : p.slice(1, 7);
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    } else {
+      const nums = p.match(/[\d.]+/g)?.map(Number) ?? [];
+      if (nums.length >= 3) [r, g, b] = nums;
+      else continue;
+    }
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    if (lum > 0.85) light += 1;
+  }
+  return light / useful.length;
+}
+
+function classifyLogo(part: BrandAssetPart, meta: LogoMeta | undefined, taken: Set<LogoVariant>): LogoVariant {
+  const hint = `${part.name} ${part.sourceUrl ?? ''} ${meta?.hint ?? ''}`.toLowerCase();
+  const zone = meta?.zone ?? 'body';
+  const size = imageSize(part.mimeType, part.data);
+  const ratio = size ? size.w / size.h : null;
+  const lightShare = part.mimeType === 'image/svg+xml' ? svgLightShare(part.data) : null;
+
+  if (/stacked|vertical|portrait/.test(hint)) return 'Stacked';
+  if (/mono|black|one-?colou?r|single-?colou?r|greyscale|grayscale/.test(hint) && !/white/.test(hint)) return 'Mono';
+  if (/white|reverse|inverse|inverted|negative|light|knockout|on-dark|dark-mode|-dark|_dark/.test(hint)) return 'Reverse (white)';
+  if (lightShare !== null && lightShare >= 0.7) return 'Reverse (white)';
+  if (zone === 'icon' || /favicon|apple-touch|mask-icon|pinned-tab|\bicon\b|symbol|brandmark|\bmark\b/.test(hint)) return 'Icon';
+  if (ratio !== null && ratio >= 0.8 && ratio <= 1.25) return 'Icon';
+  if (zone === 'footer' && taken.has('Primary') && !taken.has('Reverse (white)')) return 'Reverse (white)';
+  if (ratio !== null && ratio > 0.45 && ratio < 0.8 && taken.has('Primary')) return 'Stacked';
+  if (!taken.has('Primary')) return 'Primary';
+  return 'Alternate';
+}
+
+function labelLogo(part: BrandAssetPart, variant: LogoVariant): BrandAssetPart {
+  const base = part.name.replace(/^(Primary|Reverse \(white\)|Icon|Stacked|Mono|Alternate) - /, '');
+  return { ...part, variant, name: cleanFileName(`${variant} - ${base}`) };
+}
+
+function zoneOrder(zone: LogoZone | undefined): number {
+  const rank: Record<LogoZone, number> = { header: 0, inline: 0, footer: 1, meta: 2, body: 3, icon: 4, wellknown: 5, external: 6 };
+  return rank[zone ?? 'body'];
+}
+
 async function collectUntil<T>(urls: string[], max: number, concurrency: number, fn: (url: string) => Promise<T | null>): Promise<T[]> {
   const out: T[] = [];
   const queue = [...urls];
@@ -715,7 +907,7 @@ export async function lookupBrandGuidelines(opts: {
   let hunt: Hunt | null = null;
   let site: string | null = null;
   for (const candidate of siteQueue) {
-    const read = await readSite(candidate);
+    const read = await readSite(candidate, brandName);
     if (read) {
       hunt = read;
       site = read.pages[0] ?? candidate;
@@ -753,21 +945,47 @@ export async function lookupBrandGuidelines(opts: {
   // 5. Downloads.
   const parts: BrandAssetPart[] = [];
   if (hunt) {
-    const aiLogos = stringList(parsed.logoUrls, 3).map((u) => cleanHttpUrl(u)).filter((u): u is string => u !== null);
+    const aiLogos = stringList(parsed.logoUrls, MAX_LOGOS).map((u) => cleanHttpUrl(u)).filter((u): u is string => u !== null);
     const aiRefs = stringList(parsed.refUrls, 6).map((u) => cleanHttpUrl(u)).filter((u): u is string => u !== null);
     const refOrder: string[] = [];
     for (const u of [...aiRefs, ...hunt.imageCandidates]) pushUnique(refOrder, u, 30);
 
+    const rawLogos: BrandAssetPart[] = [];
+    const host = hostOf(site ?? '') || 'brand';
     hunt.inlineSvgLogos.forEach((svg, i) => {
-      parts.push({ kind: 'logos', name: cleanFileName(`${hostOf(site ?? '') || 'brand'}-logo${i ? `-${i + 1}` : ''}.svg`), mimeType: 'image/svg+xml', data: svg, sourceUrl: site });
+      const zone = hunt.inlineSvgZones[i] ?? 'inline';
+      const url = `inline:${zone}:${i}`;
+      hunt.logoMeta.set(url, { hint: `inline svg ${zone}`, zone });
+      rawLogos.push({ kind: 'logos', name: cleanFileName(`${host}-logo${i ? `-${i + 1}` : ''}.svg`), mimeType: 'image/svg+xml', data: svg, sourceUrl: url });
     });
-    const logoSlots = Math.max(1, MAX_LOGOS - hunt.inlineSvgLogos.length);
-    // Trust the model's picks first; only fall back to raw candidates when nothing it chose downloads.
+
+    // Every distinct variant the brand exposes: model picks first, then same-site header/footer/meta/body
+    // logos that name the brand, then icons and well-known paths. Partner logos are only reachable
+    // through the model's list, never through the fallback.
     const pickLogos = async (): Promise<BrandAssetPart[]> => {
-      const chosen = aiLogos.length ? await collectUntil(aiLogos, logoSlots, 3, (u) => downloadImage(u, 'logos', MAX_LOGO, 200, 'logo')) : [];
-      if (chosen.length > 0 || hunt.inlineSvgLogos.length > 0) return chosen;
-      const rest = hunt.logoCandidates.filter((u) => !aiLogos.includes(u));
-      return collectUntil(rest, 1, 4, (u) => downloadImage(u, 'logos', MAX_LOGO, 200, 'logo'));
+      const siteUrl = site ?? '';
+      const order: string[] = [];
+      for (const u of aiLogos) pushUnique(order, u, 60);
+      const own = hunt.logoCandidates
+        .filter((u) => !aiLogos.includes(u))
+        .filter((u) => {
+          const meta = hunt.logoMeta.get(u);
+          const zone = meta?.zone ?? 'body';
+          if (zone === 'external') return false;
+          if (zone === 'wellknown' || zone === 'icon') return sameSite(u, siteUrl);
+          const hint = `${u} ${meta?.hint ?? ''}`;
+          // Same-site and either sits in header/footer or names the brand.
+          return sameSite(u, siteUrl) && (zone === 'header' || zone === 'footer' || zone === 'meta' || mentionsBrand(hint, hunt.brandTokens));
+        })
+        .sort((a, b) => zoneOrder(hunt.logoMeta.get(a)?.zone) - zoneOrder(hunt.logoMeta.get(b)?.zone));
+      for (const u of own) pushUnique(order, u, 60);
+      const slots = Math.max(1, MAX_LOGOS - rawLogos.length);
+      const got = await collectUntil(order, slots, 4, (u) => downloadImage(u, 'logos', MAX_LOGO, 200, 'logo'));
+      if (got.length === 0 && rawLogos.length === 0) {
+        const external = hunt.logoCandidates.filter((u) => hunt.logoMeta.get(u)?.zone === 'external');
+        return collectUntil(external, 1, 2, (u) => downloadImage(u, 'logos', MAX_LOGO, 200, 'logo'));
+      }
+      return got;
     };
 
     const [logos, refs, fonts, docs] = await Promise.all([
@@ -776,10 +994,30 @@ export async function lookupBrandGuidelines(opts: {
       collectUntil(hunt.fontCandidates, MAX_FONTS, 4, downloadFont),
       collectUntil(hunt.docCandidates, MAX_DOCS, 2, downloadDoc),
     ]);
-    parts.push(...logos, ...refs, ...fonts);
+    // Label each logo variant; drop exact duplicates before labelling so "Primary" lands on a real file.
+    const taken = new Set<LogoVariant>();
+    for (const logo of dedupeParts([...rawLogos, ...logos])) {
+      const metaKey = logo.sourceUrl ?? '';
+      let meta = hunt.logoMeta.get(metaKey);
+      if (!meta) {
+        // Redirected downloads: match by original candidate whose final URL we stored.
+        for (const [u, m] of hunt.logoMeta) if (metaKey.startsWith(u.split('?')[0])) meta = m;
+      }
+      const variant = classifyLogo(logo, meta, taken);
+      taken.add(variant);
+      parts.push(labelLogo({ ...logo, sourceUrl: logo.sourceUrl?.startsWith('inline:') ? site : logo.sourceUrl }, variant));
+    }
+    parts.push(...refs, ...fonts);
     for (const d of docs) {
       parts.push(d.doc);
-      for (const p of d.parts) parts.push({ kind: p.kind, name: p.name, mimeType: p.mimeType, data: p.data, sourceUrl: d.doc.sourceUrl });
+      for (const p of d.parts) {
+        const part: BrandAssetPart = { kind: p.kind, name: p.name, mimeType: p.mimeType, data: p.data, sourceUrl: d.doc.sourceUrl };
+        if (p.kind === 'logos') {
+          const variant = classifyLogo(part, { hint: `brand kit ${p.name}`, zone: 'body' }, taken);
+          taken.add(variant);
+          parts.push(labelLogo(part, variant));
+        } else parts.push(part);
+      }
     }
   }
 

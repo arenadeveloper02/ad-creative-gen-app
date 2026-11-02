@@ -20,8 +20,16 @@
   background-size: 10px 10px; background-position: 0 0, 0 5px, 5px -5px, -5px 0;
 }
 .filelist .thumb:hover { border-color: var(--aurora-c1); }
+.filelist .thumb.img.dark { background: #1f2430; }
 .filelist .thumb.img img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 3px; box-sizing: border-box; }
 .filelist .thumb.font { background: var(--aurora-glass2); font-size: 20px; font-weight: 600; line-height: 1; }
+.filelist .variant {
+  flex: 0 0 auto; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--aurora-line); background: var(--aurora-glass2); color: var(--aurora-text2);
+}
+.filelist .variant.v-primary { border-color: var(--aurora-c1); color: var(--aurora-c1); }
+.filelist .variant.v-reverse-white- { background: #1f2430; color: #fff; border-color: #1f2430; }
+.filelist .variant.v-icon { color: var(--aurora-done); border-color: var(--aurora-done); }
 .filelist .thumb.doc { background: var(--aurora-glass2); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--aurora-text3); }
 .swatches { display: flex; gap: 8px; }
 .swatches input[type='color'] { width: 46px; height: 36px; padding: 2px; border-radius: 10px; border: 1px solid var(--aurora-line); background: var(--aurora-glass3); }

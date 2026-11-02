@@ -50,16 +50,24 @@ function fmtSize(bytes: number): string {
 
 type BrandMode = 'new' | 'existing';
 
+const VARIANT_RE = /^(Primary|Reverse \(white\)|Icon|Stacked|Mono|Alternate) - (.+)$/;
+
+/** Logo files pulled by the brand hunt are named "<Variant> - <file>"; show the variant as a tag. */
+function splitVariant(name: string): { variant: string | null; name: string } {
+  const m = name.match(VARIANT_RE);
+  return m ? { variant: m[1], name: m[2] } : { variant: null, name };
+}
+
 function assetUrl(id: string): string {
   return `/api/assets/${encodeURIComponent(id)}`;
 }
 
 /** Inline preview: image thumbnail, live font sample, or a doc badge. Click opens the file. */
-function AssetThumb({ file }: { file: AssetDTO }) {
+function AssetThumb({ file, dark = false }: { file: AssetDTO; dark?: boolean }) {
   const url = assetUrl(file.id);
   if (file.mimeType.startsWith('image/')) {
     return (
-      <a className="thumb img" href={url} target="_blank" rel="noreferrer" title={`Open ${file.name}`}>
+      <a className={`thumb img${dark ? ' dark' : ''}`} href={url} target="_blank" rel="noreferrer" title={`Open ${file.name}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={file.name} loading="lazy" />
       </a>
@@ -564,8 +572,16 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                 <ul className="filelist">
                   {(grouped[field.key] ?? []).map((file) => (
                     <li key={file.id}>
-                      <AssetThumb file={file} />
-                      <span className="nm">{file.name}</span>
+                      {(() => {
+                        const split = splitVariant(file.name);
+                        return (
+                          <>
+                            <AssetThumb file={file} dark={split.variant === 'Reverse (white)'} />
+                            {split.variant && <span className={`variant v-${split.variant.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{split.variant}</span>}
+                            <span className="nm">{split.name}</span>
+                          </>
+                        );
+                      })()}
                       <span className="sz">{fmtSize(file.size)}</span>
                       <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
                         ✕
