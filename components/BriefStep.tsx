@@ -119,20 +119,30 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   /** Files the last AI fill added, so a new company replaces them instead of piling up. */
   const aiAssetIds = useRef<Set<string>>(new Set());
 
-  // In AI mode the auto-saved profile stays linked while the user keeps typing new companies.
-  const selected = brandMode !== 'manual' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
+  // The profile the project will point at: the picked one under Use existing, or the one AI just saved.
+  const linked = brandMode !== 'manual' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
+  // Saved profiles are only shown and editable under Use existing; AI mode never displays old profile files.
+  const selected = brandMode === 'existing' ? linked : null;
   const isNew = brandMode !== 'existing';
   const isAi = brandMode === 'ai';
 
   function chooseNewProfile(mode: 'ai' | 'manual') {
-    const leavingExisting = brandMode === 'existing';
     setBrandMode(mode);
     setProfileId('__new__');
     setOverwrite(false);
     setStatus(mode === 'ai' ? 'Type the company name and leave the field — logo, colours, fonts and creatives fill in and the profile is saved for you.' : 'Fill the brand in yourself and upload your own files. Save the profile to reuse it.');
     setStatusKind('');
-    // Drop profile-owned assets so they are not reattached as project uploads.
-    if (leavingExisting) setAssets([]);
+    // A fresh profile starts empty: nothing from a previous company or saved profile carries over.
+    setAssets([]);
+    aiAssetIds.current = new Set();
+    lastLookupKey.current = '';
+    if (mode === 'ai') {
+      setBrandName('');
+      setWebsite('');
+      setProduct('');
+      setProfileName('');
+      productTouched.current = false;
+    }
   }
 
   function chooseExisting() {
@@ -200,7 +210,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         brandName: name,
         website: website.trim(),
         projectId: project?.id ?? undefined,
-        profileId: selected?.id ?? undefined,
+        profileId: undefined,
       }),
     });
     const parsed = await readJson(res);
@@ -241,12 +251,9 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setC2(nextC2);
     setC3(nextC3);
     const found = Array.isArray(data.assets) ? data.assets.filter((item) => item && typeof item.id === 'string') : [];
-    // Drop what the previous AI fill added (a different company), keep anything the user uploaded.
-    const kept = assets.filter((item) => !aiAssetIds.current.has(item.id));
-    const ids = new Set(kept.map((item) => item.id));
-    const fresh = found.filter((item) => !ids.has(item.id));
-    const nextAssets = [...kept, ...fresh];
-    aiAssetIds.current = new Set(fresh.map((item) => item.id));
+    // Logos, fonts and creatives belong to this company only: everything from before is replaced.
+    const nextAssets = found;
+    aiAssetIds.current = new Set(found.map((item) => item.id));
     setAssets(nextAssets);
 
     const counts = data.counts ?? {};
@@ -294,7 +301,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       form.set('file', file);
       form.set('kind', kind);
       if (project) form.set('projectId', project.id);
-      else if (selected) form.set('profileId', selected.id);
+      else if (linked) form.set('profileId', linked.id);
       const res = await fetch('/api/upload', { method: 'POST', body: form });
       const parsed = await readJson(res);
       if (!parsed.ok) {
@@ -335,7 +342,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   }
 
   function draftPayload(): BriefPayload {
-    const ids = assets.filter((item) => !selected?.assets.some((owned) => owned.id === item.id)).map((item) => item.id);
+    const ids = assets.filter((item) => !linked?.assets.some((owned) => owned.id === item.id)).map((item) => item.id);
     return payload(ids);
   }
 
@@ -355,7 +362,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       brandName: brandName.trim(),
       product: product.trim(),
       guidelineUrl: '',
-      profileId: selected ? selected.id : null,
+      profileId: linked ? linked.id : null,
       c1,
       c2,
       c3,
