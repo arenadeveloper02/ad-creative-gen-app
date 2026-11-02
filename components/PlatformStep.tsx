@@ -220,7 +220,7 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
               placeholder="e.g. Get marketing leaders to book a 15-minute demo this week. Sound professional. Do not name competitors."
             />
             <div className="footer" style={{ justifyContent: 'flex-start' }}>
-              <button type="button" className="btn ghost sm" disabled={writing || saving} onClick={() => void writeCopy()}>
+              <button type="button" className="btn sm" disabled={writing || saving} onClick={() => void writeCopy()}>
                 {writing ? 'Writing…' : preview ? 'Write again' : 'Write the copy'}
               </button>
             </div>
