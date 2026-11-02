@@ -50,6 +50,38 @@ function fmtSize(bytes: number): string {
 
 type BrandMode = 'new' | 'existing';
 
+function assetUrl(id: string): string {
+  return `/api/assets/${encodeURIComponent(id)}`;
+}
+
+/** Inline preview: image thumbnail, live font sample, or a doc badge. Click opens the file. */
+function AssetThumb({ file }: { file: AssetDTO }) {
+  const url = assetUrl(file.id);
+  if (file.mimeType.startsWith('image/')) {
+    return (
+      <a className="thumb img" href={url} target="_blank" rel="noreferrer" title={`Open ${file.name}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={file.name} loading="lazy" />
+      </a>
+    );
+  }
+  if (file.kind === 'fonts') {
+    const family = `asset-${file.id}`;
+    return (
+      <a className="thumb font" href={url} target="_blank" rel="noreferrer" title={`Open ${file.name}`}>
+        <style>{`@font-face{font-family:"${family}";src:url("${url}");font-display:block;}`}</style>
+        <span style={{ fontFamily: `"${family}", sans-serif` }}>Aa</span>
+      </a>
+    );
+  }
+  const ext = file.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'DOC';
+  return (
+    <a className="thumb doc" href={url} target="_blank" rel="noreferrer" title={`Open ${file.name}`}>
+      {ext}
+    </a>
+  );
+}
+
 export default function BriefStep({ project, profiles, saving, error, onContinue, onDraft, onProfiles }: BriefStepProps) {
   const [description, setDescription] = useState(project?.description ?? '');
   const [sceneNote, setSceneNote] = useState(project?.sceneNote ?? '');
@@ -532,6 +564,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                 <ul className="filelist">
                   {(grouped[field.key] ?? []).map((file) => (
                     <li key={file.id}>
+                      <AssetThumb file={file} />
                       <span className="nm">{file.name}</span>
                       <span className="sz">{fmtSize(file.size)}</span>
                       <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>

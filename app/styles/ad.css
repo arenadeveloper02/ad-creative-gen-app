@@ -12,6 +12,17 @@
 .filelist .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filelist .sz { color: var(--aurora-text3); white-space: nowrap; }
 .filelist button { background: none; border: 0; color: var(--aurora-bad-text); cursor: pointer; padding: 0; }
+.filelist .thumb {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--aurora-line);
+  display: flex; align-items: center; justify-content: center; overflow: hidden; text-decoration: none; color: var(--aurora-text);
+  background-color: #cfd4dc;
+  background-image: linear-gradient(45deg, #e6e9ee 25%, transparent 25%), linear-gradient(-45deg, #e6e9ee 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e6e9ee 75%), linear-gradient(-45deg, transparent 75%, #e6e9ee 75%);
+  background-size: 10px 10px; background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+.filelist .thumb:hover { border-color: var(--aurora-c1); }
+.filelist .thumb.img img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 3px; box-sizing: border-box; }
+.filelist .thumb.font { background: var(--aurora-glass2); font-size: 20px; font-weight: 600; line-height: 1; }
+.filelist .thumb.doc { background: var(--aurora-glass2); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--aurora-text3); }
 .swatches { display: flex; gap: 8px; }
 .swatches input[type='color'] { width: 46px; height: 36px; padding: 2px; border-radius: 10px; border: 1px solid var(--aurora-line); background: var(--aurora-glass3); }
 .brand-panel { margin-top: 8px; background: var(--aurora-panel-2); border: 1px solid var(--aurora-line); border-radius: 18px; padding: 14px 16px; }
