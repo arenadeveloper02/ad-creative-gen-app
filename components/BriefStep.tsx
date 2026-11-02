@@ -48,7 +48,8 @@ function fmtSize(bytes: number): string {
   return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-type BrandMode = 'new' | 'existing';
+/** ai = type the company and everything fills itself; existing = a saved profile; manual = write it all by hand. */
+type BrandMode = 'ai' | 'existing' | 'manual';
 
 const VARIANT_RE = /^(Primary|Reverse \(white\)|Icon|Stacked|Mono|Alternate) - (.+)$/;
 
@@ -96,7 +97,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const [goal, setGoal] = useState(project?.goal ?? 'Awareness');
   const [profileId, setProfileId] = useState(project?.profileId ?? '');
   const [brandMode, setBrandMode] = useState<BrandMode>(
-    project?.profileId && profiles.some((item) => item.id === project.profileId) ? 'existing' : 'new',
+    project?.profileId && profiles.some((item) => item.id === project.profileId) ? 'existing' : 'ai',
   );
   const [brandName, setBrandName] = useState(project?.brandName ?? '');
   const [website, setWebsite] = useState('');
@@ -115,14 +116,16 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const lookupAbort = useRef(0);
 
   const selected = brandMode === 'existing' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
-  const isNew = brandMode === 'new';
+  const isNew = brandMode !== 'existing';
+  const isAi = brandMode === 'ai';
 
-  function chooseNewProfile() {
+  function chooseNewProfile(mode: 'ai' | 'manual') {
     const leavingExisting = brandMode === 'existing';
-    setBrandMode('new');
+    setBrandMode(mode);
     setProfileId('__new__');
     setOverwrite(false);
-    setStatus('');
+    setStatus(mode === 'ai' ? 'Type the company name and leave the field — logo, colours, fonts and creatives fill in and the profile is saved for you.' : 'Fill the brand in yourself and upload your own files. Save the profile to reuse it.');
+    setStatusKind('');
     // Drop profile-owned assets so they are not reattached as project uploads.
     if (leavingExisting) setAssets([]);
   }
@@ -182,7 +185,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const ticket = lookupAbort.current + 1;
     lookupAbort.current = ticket;
     setLookingUp(true);
-    setStatus('Finding the brand site and pulling logo, colours, fonts and creatives with AI…');
+    setStatus('');
     setStatusKind('');
 
     const res = await fetch('/api/brand-guidelines', {
@@ -218,20 +221,21 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     };
 
     lastLookupKey.current = key;
-    if (typeof data.brandName === 'string' && data.brandName.trim() !== '') setBrandName(data.brandName);
-    if (typeof data.product === 'string' && data.product.trim() !== '' && product.trim() === '') setProduct(data.product);
+    const nextBrand = typeof data.brandName === 'string' && data.brandName.trim() !== '' ? data.brandName : name;
+    const nextProduct = typeof data.product === 'string' && data.product.trim() !== '' && product.trim() === '' ? data.product : product;
+    const nextC1 = typeof data.c1 === 'string' ? data.c1 : c1;
+    const nextC2 = typeof data.c2 === 'string' ? data.c2 : c2;
+    const nextC3 = typeof data.c3 === 'string' ? data.c3 : c3;
+    setBrandName(nextBrand);
+    setProduct(nextProduct);
     if (typeof data.website === 'string' && data.website.trim() !== '' && website.trim() === '') setWebsite(data.website);
-    if (typeof data.c1 === 'string') setC1(data.c1);
-    if (typeof data.c2 === 'string') setC2(data.c2);
-    if (typeof data.c3 === 'string') setC3(data.c3);
+    setC1(nextC1);
+    setC2(nextC2);
+    setC3(nextC3);
     const found = Array.isArray(data.assets) ? data.assets.filter((item) => item && typeof item.id === 'string') : [];
-    if (found.length > 0) {
-      setAssets((current) => {
-        const ids = new Set(current.map((item) => item.id));
-        const added = found.filter((item) => !ids.has(item.id));
-        return added.length ? [...current, ...added] : current;
-      });
-    }
+    const ids = new Set(assets.map((item) => item.id));
+    const nextAssets = [...assets, ...found.filter((item) => !ids.has(item.id))];
+    if (found.length > 0) setAssets(nextAssets);
 
     const counts = data.counts ?? {};
     const bits: string[] = [];
@@ -242,6 +246,25 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const fontNote = typeof data.headlineFont === 'string' && data.headlineFont.trim() !== '' ? ` Headline font: ${data.headlineFont.trim()}.` : '';
     const summary = typeof data.summary === 'string' && data.summary.trim() !== '' ? ` ${data.summary.trim()}` : '';
     const filled = bits.length ? ` Pulled ${bits.join(', ')} from the brand site — everything stays editable.` : ' No logo, fonts or creatives were reachable online — upload them below if you have them.';
+
+    // Save it as a profile straight away so it shows under Use existing next time.
+    if (brandMode === 'ai') {
+      const saved = await persistProfile({
+        name: profileName.trim() || nextBrand.trim(),
+        brandName: nextBrand,
+        product: nextProduct,
+        c1: nextC1,
+        c2: nextC2,
+        c3: nextC3,
+        assetIds: nextAssets.map((item) => item.id),
+        overwrite: true,
+      });
+      if (saved) {
+        setStatus(`Brand filled with AI and saved as profile "${saved.name}".${filled}${fontNote}${summary}`);
+        setStatusKind('ok');
+        return;
+      }
+    }
     setStatus(`Brand colours filled with AI.${filled}${fontNote}${summary}`);
     setStatusKind('ok');
   }
@@ -327,34 +350,33 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     };
   }
 
-  async function saveProfile() {
-    const name = profileName.trim();
-    if (name === '') {
+  /** Creates or overwrites a profile and switches the panel to it. Returns the saved profile, or null after showing the error. */
+  async function persistProfile(input: {
+    name: string;
+    brandName: string;
+    product: string;
+    c1: string;
+    c2: string;
+    c3: string;
+    assetIds: string[];
+    overwrite: boolean;
+  }): Promise<ProfileDTO | null> {
+    if (input.name === '') {
       setStatus('Enter a name for the profile.');
       setStatusKind('err');
-      return;
+      return null;
     }
     const res = await fetch('/api/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        brandName,
-        product,
-        guidelineUrl: '',
-        c1,
-        c2,
-        c3,
-        assetIds: assets.map((item) => item.id),
-        overwrite,
-      }),
+      body: JSON.stringify({ ...input, guidelineUrl: '' }),
     });
     const parsed = await readJson(res);
     if (!parsed.ok) {
       if (res.status === 409) setOverwrite(true);
       setStatus(parsed.error);
       setStatusKind('err');
-      return;
+      return null;
     }
     const saved = parsed.data as ProfileDTO;
     const next = [...profiles.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name));
@@ -363,6 +385,21 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setProfileId(saved.id);
     setAssets(saved.assets);
     setOverwrite(false);
+    return saved;
+  }
+
+  async function saveProfile() {
+    const saved = await persistProfile({
+      name: profileName.trim() || (isAi ? brandName.trim() : ''),
+      brandName,
+      product,
+      c1,
+      c2,
+      c3,
+      assetIds: assets.map((item) => item.id),
+      overwrite,
+    });
+    if (!saved) return;
     setStatus(`Saved profile "${saved.name}" with guidelines, logos, fonts and creatives.`);
     setStatusKind('ok');
   }
@@ -409,7 +446,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const rest = profiles.filter((item) => item.id !== selected.id);
     onProfiles(rest);
     if (rest.length === 0) {
-      setBrandMode('new');
+      setBrandMode('ai');
       setProfileId('__new__');
       setAssets([]);
     } else {
@@ -437,13 +474,13 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         </select>
 
         <h4 style={{ marginTop: 22 }}>Brand profile, guidelines and assets</h4>
-        <p className="hint">Fill brand colours and logo with AI from the company name, upload guideline files, or pick a saved profile under Use existing.</p>
+        <p className="hint">Type the company name and AI fills the logo, colours, fonts and creatives and saves the profile. Or pick a saved profile, or write one by hand.</p>
 
         <div className="brand-panel">
           <label>Brand profile</label>
           <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
-            <button type="button" className={`chip${brandMode === 'new' ? ' on' : ''}`} onClick={chooseNewProfile}>
-              New profile
+            <button type="button" className={`chip${brandMode === 'ai' ? ' on' : ''}`} onClick={() => chooseNewProfile('ai')}>
+              Auto-fill with AI
             </button>
             <span className="brand-or" aria-hidden="true">or</span>
             <button
@@ -452,11 +489,15 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
               disabled={profiles.length === 0}
               onClick={chooseExisting}
             >
-              Use existing
+              Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
+            </button>
+            <span className="brand-or" aria-hidden="true">or</span>
+            <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={() => chooseNewProfile('manual')}>
+              Write manually
             </button>
           </div>
           {profiles.length === 0 && (
-            <p className="hint">No saved profiles yet. Stay on New profile, fill the brand in, and save it if you want to reuse it.</p>
+            <p className="hint">No saved profiles yet. Auto-fill one with AI or write one manually — it will appear under Use existing.</p>
           )}
 
           {brandMode === 'existing' && (
@@ -500,9 +541,13 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                 value={brandName}
                 onChange={(e) => setBrandName(e.target.value)}
                 onBlur={() => {
-                  if (isNew && brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
+                  if (isAi && brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
                 }}
                 placeholder="e.g. Gentle Dental"
+                disabled={lookingUp}
               />
             </div>
             <div>
@@ -511,31 +556,45 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             </div>
           </div>
 
-          <div className="row" style={{ marginTop: 12 }}>
-            <div>
-              <label htmlFor="website">Brand website (optional)</label>
-              <input
-                id="website"
-                type="url"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="e.g. https://gentledental.com"
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn sm"
-                disabled={lookingUp || uploading || brandName.trim().length < 2}
-                onClick={() => void fillBrandWithAi(true)}
-              >
-                {lookingUp ? 'Looking up…' : 'Fill with AI'}
-              </button>
-            </div>
-          </div>
-          <p className="hint">Type a brand name and leave the field, or click Fill with AI. It finds the official site, then pulls the logo, brand colours, font files, hero creatives and any public brand-kit PDF into the fields below.</p>
+          {isAi && (
+            <>
+              <div className="row" style={{ marginTop: 12 }}>
+                <div>
+                  <label htmlFor="website">Brand website (optional, helps the AI find the right company)</label>
+                  <input
+                    id="website"
+                    type="url"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    onBlur={() => {
+                      if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    placeholder="e.g. https://gentledental.com"
+                    disabled={lookingUp}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profileName">Profile name (optional, defaults to the brand)</label>
+                  <input
+                    id="profileName"
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => {
+                      setProfileName(e.target.value);
+                      setOverwrite(false);
+                    }}
+                    placeholder={brandName.trim() || 'e.g. Gentle Dental – Q3'}
+                  />
+                </div>
+              </div>
+              {lookingUp && <p className="status-line">Finding the brand site and pulling logo, colours, fonts and creatives with AI…</p>}
+            </>
+          )}
 
-          {isNew && (
+          {brandMode === 'manual' && (
             <div style={{ marginTop: 12 }}>
               <label htmlFor="profileName">New profile name</label>
               <input
