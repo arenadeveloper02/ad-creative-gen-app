@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
-import { listProjects, claimAssets } from '@/lib/actions';
+import { listProjects, claimAssets, ensureProfileAssetsOnProject } from '@/lib/actions';
 import { parseBrief } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { projectInclude, serializeProject } from '@/lib/serialize';
@@ -48,6 +48,9 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!claimed.ok) {
     await prisma.adProject.delete({ where: { id: created.id } });
     return NextResponse.json({ error: claimed.error }, { status: 400 });
+  }
+  if (brief.profileId) {
+    await ensureProfileAssetsOnProject(email, brief.profileId, created.id);
   }
   const full = await prisma.adProject.findFirst({ where: { id: created.id, ownerEmail: email }, include: projectInclude });
   if (!full) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });

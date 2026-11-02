@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
-import { claimAssets } from '@/lib/actions';
+import { attachAssetsToProfile } from '@/lib/actions';
 import { isId, parseProfile } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { profileInclude, serializeProfile } from '@/lib/serialize';
@@ -30,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       c3: profile.c3,
     },
   });
-  const claimed = await claimAssets(email, profile.assetIds, { profileId: existing.id });
+  const claimed = await attachAssetsToProfile(email, profile.assetIds, existing.id);
   if (!claimed.ok) return NextResponse.json({ error: claimed.error }, { status: 400 });
   const full = await prisma.brandProfile.findFirst({ where: { id: existing.id, ownerEmail: email }, include: profileInclude });
   if (!full) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });

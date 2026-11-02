@@ -65,3 +65,83 @@ export async function claimAssets(ownerEmail: string, ids: string[], target: { p
   });
   return { ok: true };
 }
+
+/**
+ * Puts the given assets on a brand profile.
+ * Unassigned files are claimed; files already on this profile are kept;
+ * files on a project (or another profile) are copied so Use existing stays complete.
+ */
+export async function attachAssetsToProfile(
+  ownerEmail: string,
+  ids: string[],
+  profileId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return { ok: true };
+  if (unique.some((id) => !isId(id))) return { ok: false, error: 'Invalid file.' };
+  const rows = await prisma.adAsset.findMany({
+    where: { id: { in: unique }, ownerEmail },
+    select: { id: true, kind: true, name: true, mimeType: true, size: true, data: true, projectId: true, profileId: true },
+  });
+  if (rows.length !== unique.length) return { ok: false, error: 'One of those files is not available.' };
+
+  const claimIds: string[] = [];
+  const clones: typeof rows = [];
+  for (const row of rows) {
+    if (row.profileId === profileId) continue;
+    if (row.projectId === null && row.profileId === null) {
+      claimIds.push(row.id);
+      continue;
+    }
+    clones.push(row);
+  }
+
+  if (claimIds.length) {
+    await prisma.adAsset.updateMany({
+      where: { id: { in: claimIds }, ownerEmail, projectId: null, profileId: null },
+      data: { profileId },
+    });
+  }
+  if (clones.length) {
+    await prisma.adAsset.createMany({
+      data: clones.map((row) => ({
+        ownerEmail,
+        profileId,
+        kind: row.kind,
+        name: row.name,
+        mimeType: row.mimeType,
+        size: row.size,
+        data: row.data,
+      })),
+    });
+  }
+  return { ok: true };
+}
+
+/** Copies any missing profile files onto the project so Use existing feeds generation. */
+export async function ensureProfileAssetsOnProject(
+  ownerEmail: string,
+  profileId: string,
+  projectId: string,
+): Promise<void> {
+  const profileAssets = await prisma.adAsset.findMany({ where: { ownerEmail, profileId } });
+  if (profileAssets.length === 0) return;
+  const projectAssets = await prisma.adAsset.findMany({
+    where: { ownerEmail, projectId },
+    select: { kind: true, name: true, size: true },
+  });
+  const have = new Set(projectAssets.map((row) => `${row.kind}|${row.name}|${row.size}`));
+  const missing = profileAssets.filter((row) => !have.has(`${row.kind}|${row.name}|${row.size}`));
+  if (missing.length === 0) return;
+  await prisma.adAsset.createMany({
+    data: missing.map((row) => ({
+      ownerEmail,
+      projectId,
+      kind: row.kind,
+      name: row.name,
+      mimeType: row.mimeType,
+      size: row.size,
+      data: row.data,
+    })),
+  });
+}

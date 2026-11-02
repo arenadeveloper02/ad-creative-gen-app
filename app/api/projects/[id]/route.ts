@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
+import { ensureProfileAssetsOnProject } from '@/lib/actions';
 import { isId, parseBrief, parsePlatform } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { projectInclude, serializeProject } from '@/lib/serialize';
@@ -39,6 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.brandName = brief.brandName;
     data.product = brief.product;
     data.guidelineUrl = brief.guidelineUrl;
+    data.profileId = brief.profileId;
     data.c1 = brief.c1;
     data.c2 = brief.c2;
     data.c3 = brief.c3;
@@ -59,7 +61,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data,
     include: projectInclude,
   });
-  return NextResponse.json(serializeProject(updated));
+  if (typeof data.profileId === 'string' && data.profileId !== '') {
+    await ensureProfileAssetsOnProject(loaded.ownerEmail, data.profileId, loaded.id);
+  }
+  const full = data.profileId
+    ? await prisma.adProject.findFirst({ where: { id: loaded.id, ownerEmail: loaded.ownerEmail }, include: projectInclude })
+    : updated;
+  if (!full) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+  return NextResponse.json(serializeProject(full));
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {

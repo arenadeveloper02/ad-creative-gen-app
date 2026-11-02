@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
-import { claimAssets, listProfiles } from '@/lib/actions';
+import { attachAssetsToProfile, listProfiles } from '@/lib/actions';
 import { parseProfile } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { profileInclude, serializeProfile } from '@/lib/serialize';
@@ -53,7 +53,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         },
       });
 
-  const claimed = await claimAssets(email, profile.assetIds, { profileId: saved.id });
+  const claimed = await attachAssetsToProfile(email, profile.assetIds, saved.id);
   if (!claimed.ok) return NextResponse.json({ error: claimed.error }, { status: 400 });
   const full = await prisma.brandProfile.findFirst({ where: { id: saved.id, ownerEmail: email }, include: profileInclude });
   if (!full) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });

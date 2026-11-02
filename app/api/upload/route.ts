@@ -4,8 +4,34 @@ import { currentOwnerEmail } from '@/lib/arena-email';
 import { cleanFileName, isAssetKind, isId, svgIsUnsafe } from '@/lib/guard';
 import { MAX_BYTES, MAX_FILES } from '@/lib/limits';
 import { mimeAllowed } from '@/lib/platforms';
+import { extractFromGuidelines } from '@/lib/extract-guidelines';
 
 export const dynamic = 'force-dynamic';
+
+type CreatedAsset = { id: string; kind: string; name: string; mimeType: string; size: number };
+
+async function createAsset(args: {
+  email: string;
+  kind: string;
+  name: string;
+  mimeType: string;
+  data: Buffer;
+  link: { projectId?: string; profileId?: string };
+}): Promise<CreatedAsset> {
+  const asset = await prisma.adAsset.create({
+    data: {
+      ownerEmail: args.email,
+      kind: args.kind,
+      name: cleanFileName(args.name),
+      mimeType: args.mimeType,
+      size: args.data.length,
+      data: args.data,
+      ...args.link,
+    },
+    select: { id: true, kind: true, name: true, mimeType: true, size: true },
+  });
+  return asset;
+}
 
 export async function POST(req: Request): Promise<NextResponse> {
   const email = await currentOwnerEmail();
@@ -44,17 +70,32 @@ export async function POST(req: Request): Promise<NextResponse> {
     link = { profileId };
   }
 
-  const asset = await prisma.adAsset.create({
-    data: {
-      ownerEmail: email,
-      kind,
-      name: cleanFileName(file.name),
-      mimeType: mime,
-      size: file.size,
-      data: bytes,
-      ...link,
-    },
-    select: { id: true, kind: true, name: true, mimeType: true, size: true },
+  const asset = await createAsset({
+    email,
+    kind,
+    name: file.name,
+    mimeType: mime,
+    data: bytes,
+    link,
   });
-  return NextResponse.json(asset);
+
+  const extracted: CreatedAsset[] = [];
+  if (kind === 'guidelines') {
+    const parts = await extractFromGuidelines(file.name, mime, bytes);
+    for (const part of parts) {
+      if (part.mimeType === 'image/svg+xml' && svgIsUnsafe(part.data)) continue;
+      if (!mimeAllowed(part.kind, part.mimeType)) continue;
+      const created = await createAsset({
+        email,
+        kind: part.kind,
+        name: part.name,
+        mimeType: part.mimeType,
+        data: part.data,
+        link,
+      });
+      extracted.push(created);
+    }
+  }
+
+  return NextResponse.json({ ...asset, extracted });
 }
