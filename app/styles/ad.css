@@ -15,6 +15,11 @@
 .swatches { display: flex; gap: 8px; }
 .swatches input[type='color'] { width: 46px; height: 36px; padding: 2px; border-radius: 10px; border: 1px solid var(--aurora-line); background: var(--aurora-glass3); }
 .brand-panel { margin-top: 8px; background: var(--aurora-panel-2); border: 1px solid var(--aurora-line); border-radius: 18px; padding: 14px 16px; }
+.brand-mode-chips { align-items: center; margin-bottom: 8px; }
+.brand-or {
+  display: inline-flex; align-items: center; padding: 0 4px;
+  color: var(--aurora-text3); font-size: 13px; font-weight: 600; text-transform: lowercase;
+}
 .preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 36px; }
 .versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
 .vcard { text-align: left; width: 100%; border: 1px solid var(--aurora-line); border-radius: 16px; padding: 14px; background: var(--aurora-panel); cursor: pointer; color: inherit; font: inherit; }

@@ -40,11 +40,16 @@ function fmtSize(bytes: number): string {
   return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+type BrandMode = 'new' | 'existing';
+
 export default function BriefStep({ project, profiles, saving, error, onContinue, onDraft, onProfiles }: BriefStepProps) {
   const [description, setDescription] = useState(project?.description ?? '');
   const [sceneNote, setSceneNote] = useState(project?.sceneNote ?? '');
   const [goal, setGoal] = useState(project?.goal ?? 'Awareness');
   const [profileId, setProfileId] = useState(project?.profileId ?? '');
+  const [brandMode, setBrandMode] = useState<BrandMode>(
+    project?.profileId && profiles.some((item) => item.id === project.profileId) ? 'existing' : 'new',
+  );
   const [brandName, setBrandName] = useState(project?.brandName ?? '');
   const [product, setProduct] = useState(project?.product ?? '');
   const [guidelineUrl, setGuidelineUrl] = useState(project?.guidelineUrl ?? '');
@@ -58,8 +63,35 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const [overwrite, setOverwrite] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const selected = profiles.find((item) => item.id === profileId) ?? null;
-  const isNew = profileId === '__new__';
+  const selected = brandMode === 'existing' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
+  const isNew = brandMode === 'new';
+
+  function chooseNewProfile() {
+    const leavingExisting = brandMode === 'existing';
+    setBrandMode('new');
+    setProfileId('__new__');
+    setOverwrite(false);
+    setStatus('');
+    // Drop profile-owned assets so they are not reattached as project uploads.
+    if (leavingExisting) setAssets([]);
+  }
+
+  function chooseExisting() {
+    if (profiles.length === 0) {
+      setStatus('No saved profiles yet. Create a new one first.');
+      setStatusKind('err');
+      return;
+    }
+    setBrandMode('existing');
+    setOverwrite(false);
+    setStatus('');
+    const keep = profiles.find((item) => item.id === profileId);
+    if (keep) {
+      applyProfile(keep.id);
+      return;
+    }
+    applyProfile(profiles[0].id);
+  }
 
   const grouped = useMemo(() => {
     const map: Record<string, AssetDTO[]> = {};
@@ -167,6 +199,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const saved = parsed.data as ProfileDTO;
     const next = [...profiles.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name));
     onProfiles(next);
+    setBrandMode('existing');
     setProfileId(saved.id);
     setAssets(saved.assets);
     setOverwrite(false);
@@ -203,8 +236,15 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       setStatusKind('err');
       return;
     }
-    onProfiles(profiles.filter((item) => item.id !== selected.id));
-    setProfileId('');
+    const rest = profiles.filter((item) => item.id !== selected.id);
+    onProfiles(rest);
+    if (rest.length === 0) {
+      setBrandMode('new');
+      setProfileId('__new__');
+      setAssets([]);
+    } else {
+      applyProfile(rest[0].id);
+    }
     setStatus(`Deleted "${selected.name}".`);
     setStatusKind('ok');
   }
@@ -227,31 +267,48 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         </select>
 
         <h4 style={{ marginTop: 22 }}>Brand profile, guidelines and assets</h4>
-        <p className="hint">A saved profile is optional. Type the brand details below, or pick a profile to fill them in.</p>
+        <p className="hint">Choose new profile or use existing. Brand fields, colours, and assets work the same either way.</p>
 
         <div className="brand-panel">
-          <label htmlFor="profileSelect">Brand profile</label>
-          <select
-            id="profileSelect"
-            value={profileId}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '__new__' || value === '') {
-                setProfileId(value);
-                if (value === '__new__') setAssets([]);
-                return;
-              }
-              applyProfile(value);
-            }}
-          >
-            <option value="">No saved profile</option>
-            {profiles.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-            <option value="__new__">+ Add new profile…</option>
-          </select>
+          <label>Brand profile</label>
+          <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
+            <button type="button" className={`chip${brandMode === 'new' ? ' on' : ''}`} onClick={chooseNewProfile}>
+              New profile
+            </button>
+            <span className="brand-or" aria-hidden="true">or</span>
+            <button
+              type="button"
+              className={`chip${brandMode === 'existing' ? ' on' : ''}`}
+              disabled={profiles.length === 0}
+              onClick={chooseExisting}
+            >
+              Use existing
+            </button>
+          </div>
+          {profiles.length === 0 && (
+            <p className="hint">No saved profiles yet. Stay on New profile, fill the brand in, and save it if you want to reuse it.</p>
+          )}
+
+          {brandMode === 'existing' && (
+            <>
+              <label htmlFor="profileSelect">Saved profile</label>
+              <select
+                id="profileSelect"
+                value={selected?.id ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '') return;
+                  applyProfile(value);
+                }}
+              >
+                {profiles.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           {selected && (
             <div className="footer" style={{ marginTop: 12 }}>
