@@ -223,9 +223,6 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
               <button type="button" className="btn ghost sm" disabled={writing || saving} onClick={() => void writeCopy()}>
                 {writing ? 'Writing…' : preview ? 'Write again' : 'Write the copy'}
               </button>
-              <button type="button" className="btn sm" disabled={!preview || writing || approved} onClick={() => setApproved(true)}>
-                {approved ? 'Copy approved' : 'Use this copy'}
-              </button>
             </div>
             {writeError && <div className="err" role="alert">{writeError}</div>}
             {preview && (
@@ -238,6 +235,13 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
                     <p>{line.primary}</p>
                   </article>
                 ))}
+              </div>
+            )}
+            {preview && (
+              <div className="footer" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
+                <button type="button" className="btn sm" disabled={writing || approved} onClick={() => setApproved(true)}>
+                  {approved ? 'Copy approved' : 'Use this copy'}
+                </button>
               </div>
             )}
             {approved && <p className="hint">This copy is approved. Generate ad will use these lines and will not write new ones.</p>}

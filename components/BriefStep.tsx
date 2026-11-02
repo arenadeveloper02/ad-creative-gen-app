@@ -126,23 +126,86 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const isNew = brandMode !== 'existing';
   const isAi = brandMode === 'ai';
 
+  /** Everything typed or AI-filled in one tab, kept while the user looks at another tab. */
+  interface ModeDraft {
+    brandName: string;
+    website: string;
+    product: string;
+    profileName: string;
+    c1: string;
+    c2: string;
+    c3: string;
+    assets: AssetDTO[];
+    profileId: string;
+    lookupKey: string;
+    aiIds: string[];
+    productTouched: boolean;
+  }
+  const drafts = useRef<{ ai: ModeDraft | null; manual: ModeDraft | null; existingId: string }>({ ai: null, manual: null, existingId: '' });
+
+  function snapshotDraft(): ModeDraft {
+    return {
+      brandName,
+      website,
+      product,
+      profileName,
+      c1,
+      c2,
+      c3,
+      assets,
+      profileId,
+      lookupKey: lastLookupKey.current,
+      aiIds: [...aiAssetIds.current],
+      productTouched: productTouched.current,
+    };
+  }
+
+  /** Remembers the current tab's unsaved state before leaving it. */
+  function stashDraft() {
+    if (brandMode === 'ai') drafts.current.ai = snapshotDraft();
+    else if (brandMode === 'manual') drafts.current.manual = snapshotDraft();
+    else drafts.current.existingId = profileId;
+  }
+
+  function restoreDraft(draft: ModeDraft) {
+    setBrandName(draft.brandName);
+    setWebsite(draft.website);
+    setProduct(draft.product);
+    setProfileName(draft.profileName);
+    setC1(draft.c1);
+    setC2(draft.c2);
+    setC3(draft.c3);
+    setAssets(draft.assets);
+    setProfileId(draft.profileId);
+    lastLookupKey.current = draft.lookupKey;
+    aiAssetIds.current = new Set(draft.aiIds);
+    productTouched.current = draft.productTouched;
+  }
+
   function chooseNewProfile(mode: 'ai' | 'manual') {
+    if (mode === brandMode) return;
+    stashDraft();
     setBrandMode(mode);
-    setProfileId('__new__');
     setOverwrite(false);
-    setStatus(mode === 'ai' ? 'Type the company name and leave the field — logo, colours, fonts and creatives fill in and the profile is saved for you.' : 'Fill the brand in yourself and upload your own files. Save the profile to reuse it.');
     setStatusKind('');
-    // A fresh profile starts empty: nothing from a previous company or saved profile carries over.
+    const draft = mode === 'ai' ? drafts.current.ai : drafts.current.manual;
+    if (draft) {
+      // Coming back: pick up exactly where this tab was left, saved or not.
+      restoreDraft(draft);
+      setStatus(mode === 'ai' ? 'Your AI-filled brand is back as you left it.' : 'Your manual profile is back as you left it.');
+      return;
+    }
+    setStatus(mode === 'ai' ? 'Type the company name and leave the field — logo, colours, fonts and creatives fill in and the profile is saved for you.' : 'Fill the brand in yourself and upload your own files. Save the profile to reuse it.');
+    // A fresh tab starts empty: nothing from a previous company or saved profile carries over.
+    setProfileId('__new__');
     setAssets([]);
     aiAssetIds.current = new Set();
     lastLookupKey.current = '';
-    if (mode === 'ai') {
-      setBrandName('');
-      setWebsite('');
-      setProduct('');
-      setProfileName('');
-      productTouched.current = false;
-    }
+    setBrandName('');
+    setWebsite('');
+    setProduct('');
+    setProfileName('');
+    productTouched.current = false;
   }
 
   function chooseExisting() {
@@ -151,15 +214,14 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       setStatusKind('err');
       return;
     }
+    if (brandMode === 'existing') return;
+    stashDraft();
     setBrandMode('existing');
     setOverwrite(false);
     setStatus('');
-    const keep = profiles.find((item) => item.id === profileId);
-    if (keep) {
-      applyProfile(keep.id);
-      return;
-    }
-    applyProfile(profiles[0].id);
+    // Prefer the profile last viewed under Use existing, then the one AI just saved, then the first.
+    const wanted = profiles.find((item) => item.id === drafts.current.existingId) ?? profiles.find((item) => item.id === profileId) ?? profiles[0];
+    applyProfile(wanted.id);
   }
 
   const grouped = useMemo(() => {
