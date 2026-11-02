@@ -43,6 +43,56 @@ function widest(ctx: CanvasRenderingContext2D, lines: string[]): number {
   return max;
 }
 
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function overlaps(a: Rect, b: Rect, gap: number): boolean {
+  return a.x < b.x + b.w + gap && a.x + a.w + gap > b.x && a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
+}
+
+/**
+ * Nudges text blocks so none of them overlap each other or the brand label.
+ * Blocks are settled in stack order (headline, sub, CTA). A block that collides is moved to the free,
+ * in-bounds spot closest to where it was: directly below or above an obstacle first, then beside it.
+ */
+function resolveCollisions(boxes: TextBox[], fixed: Rect[], width: number, height: number, gap: number): void {
+  const settled: Rect[] = [...fixed];
+  const free = (r: Rect) => r.x >= 0 && r.y >= 0 && r.x + r.w <= width && r.y + r.h <= height && !settled.some((o) => overlaps(r, o, gap));
+  for (const box of boxes) {
+    if (!free(box)) {
+      const candidates: Rect[] = [];
+      for (const o of settled) {
+        candidates.push({ ...box, y: o.y + o.h + gap }); // below
+        candidates.push({ ...box, y: o.y - gap - box.h }); // above
+        candidates.push({ ...box, x: o.x + o.w + gap }); // right
+        candidates.push({ ...box, x: o.x - gap - box.w }); // left
+        candidates.push({ ...box, x: o.x + o.w + gap, y: o.y }); // right, top-aligned
+      }
+      // Two-step moves: below one obstacle and clear of the next.
+      for (const a of settled) for (const b of settled) if (a !== b) candidates.push({ ...box, y: a.y + a.h + gap, x: b.x + b.w + gap });
+      const ok = candidates.filter(free);
+      const dist = (r: Rect) => Math.hypot(r.x - box.x, r.y - box.y) + (r.x !== box.x ? width * 0.15 : 0); // prefer vertical moves
+      ok.sort((a, b) => dist(a) - dist(b));
+      const best = ok[0];
+      if (best) {
+        box.x = best.x;
+        box.y = best.y;
+      } else {
+        // Nothing fully free: at least stay in bounds and off the brand label.
+        box.x = Math.min(width - box.w, Math.max(0, box.x));
+        box.y = Math.min(height - box.h, Math.max(0, box.y));
+        const label = fixed[0];
+        if (label && overlaps(box, label, gap)) box.y = Math.min(height - box.h, label.y + label.h + gap);
+      }
+    }
+    settled.push(box);
+  }
+}
+
 /**
  * Draws one ad version. Text is painted, never inserted as HTML. The generated Fal image, when loaded, is the backdrop.
  *
@@ -186,6 +236,33 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   if (headSpot) boxes.push({ kind: 'headline', x: headSpot.x, y: headSpot.y, w: hW, h: hH });
   if (subSpot) boxes.push({ kind: 'sub', x: subSpot.x, y: subSpot.y, w: sW, h: sH });
   if (ctaSpot) boxes.push({ kind: 'cta', x: ctaSpot.x, y: ctaSpot.y, w: ctaW, h: ctaH });
+
+  // Brand label in the top-left is a fixed obstacle; nothing may be painted over it.
+  const labelSize = Math.round(width * 0.032);
+  ctx.font = `600 ${labelSize}px Arial`;
+  const labelText = (brand || 'Your brand').toUpperCase().slice(0, 40);
+  const labelBox: Rect = { x: pad, y: pad - labelSize * 0.2, w: ctx.measureText(labelText).width, h: labelSize * 1.4 };
+  // The accent bar sits above the first block, so reserve that strip too by growing the first box upward for the check.
+  const collideGap = Math.round(width * 0.02);
+  if (boxes.length > 0) {
+    const first = boxes[0];
+    const grown: TextBox = { ...first, y: first.y - barGap - barH, h: first.h + barGap + barH };
+    resolveCollisions([grown, ...boxes.slice(1)], [labelBox], width, height, collideGap);
+    first.x = grown.x;
+    first.y = grown.y + barGap + barH;
+  }
+  for (const box of boxes) {
+    if (box.kind === 'headline' && headSpot) {
+      headSpot.x = box.x;
+      headSpot.y = box.y;
+    } else if (box.kind === 'sub' && subSpot) {
+      subSpot.x = box.x;
+      subSpot.y = box.y;
+    } else if (box.kind === 'cta' && ctaSpot) {
+      ctaSpot.x = box.x;
+      ctaSpot.y = box.y;
+    }
+  }
 
   // Solid and light templates sit the text on a panel over the photo.
   if (hasImage && (bg === 'solid' || bg === 'light') && boxes.length > 0) {

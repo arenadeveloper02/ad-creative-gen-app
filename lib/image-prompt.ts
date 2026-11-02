@@ -45,6 +45,13 @@ const LAYOUT_NOTES: Record<Layout, string> = {
   bottom: 'keep the bottom third of the frame simple and darker so a text band can sit there',
 };
 
+/** Where the brand mark may sit so it never meets the headline, subline, CTA, or the brand label in the top-left. */
+const LOGO_ZONES: Record<Layout, string> = {
+  left: 'the top-right or bottom-right corner, never in the left 45% and never along the top-left edge',
+  center: 'the bottom-right corner, never in the middle of the frame and never along the top-left edge',
+  bottom: 'the top-right corner, never in the bottom third and never along the top-left edge',
+};
+
 const VARIANT_NOTES = [
   'close framing, eye-level camera',
   'wider environmental framing, slight low angle',
@@ -69,7 +76,10 @@ export function buildImagePrompt(input: ImagePromptInput): string {
     lines.push('This is another version in the same campaign as Version A and B. Keep the same format, aspect ratio, production quality, lighting family, scene world, and brand colour treatment. Change only the camera angle and framing so it still looks like the same ad set.');
   }
   if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives.');
-  if (input.hasLogo) lines.push('The attached logo is the brand mark; place it small and legible, never distorted.');
+  if (input.hasLogo) {
+    lines.push(`The attached logo is the brand mark; place it once, small and legible, never distorted, only in ${LOGO_ZONES[input.layout]}. It must not touch or sit under the reserved text area.`);
+  }
+  lines.push('Keep the reserved text area free of logos, signage, screens with lettering, faces, and busy detail so overlaid text stays readable.');
   lines.push('Photorealistic, high detail, commercial quality, correct anatomy and product proportions.');
   lines.push('Do not render any words, letters, captions, watermarks or UI; text is added separately.');
   if (input.avoid) lines.push(`Avoid: ${input.avoid}.`);
