@@ -26,20 +26,20 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   let projectId: string | null = null;
   let profileId: string | null = null;
-  let link: { projectId?: string; profileId?: string } = {};
+  // Leave files unassigned. Linking them to the project here raced with the draft save, which then deleted them.
+  const link: { profileId?: string } = {};
 
   if (typeof body.projectId === 'string' && body.projectId !== '') {
     if (!isId(body.projectId)) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
     const project = await prisma.adProject.findFirst({ where: { id: body.projectId, ownerEmail: email }, select: { id: true } });
     if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
     projectId = project.id;
-    link = { projectId };
   } else if (typeof body.profileId === 'string' && body.profileId !== '') {
     if (!isId(body.profileId)) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
     const profile = await prisma.brandProfile.findFirst({ where: { id: body.profileId, ownerEmail: email }, select: { id: true } });
     if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
     profileId = profile.id;
-    link = { profileId };
+    link.profileId = profile.id;
   }
 
   const looked = await lookupBrandGuidelines({
@@ -51,21 +51,26 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!looked.ok) return NextResponse.json({ error: looked.error }, { status: 502 });
 
   const assets: { id: string; kind: string; name: string; mimeType: string; size: number }[] = [];
-  for (const part of looked.result.parts) {
-    if (!mimeAllowed(part.kind, part.mimeType) && !(part.kind === 'guidelines' && part.mimeType === 'application/zip')) continue;
-    const asset = await prisma.adAsset.create({
-      data: {
-        ownerEmail: email,
-        kind: part.kind,
-        name: part.name,
-        mimeType: part.mimeType,
-        size: part.data.length,
-        data: part.data,
-        ...link,
-      },
-      select: { id: true, kind: true, name: true, mimeType: true, size: true },
-    });
-    assets.push(asset);
+  try {
+    for (const part of looked.result.parts) {
+      if (!mimeAllowed(part.kind, part.mimeType) && !(part.kind === 'guidelines' && part.mimeType === 'application/zip')) continue;
+      const asset = await prisma.adAsset.create({
+        data: {
+          ownerEmail: email,
+          kind: part.kind,
+          name: part.name.slice(0, 180),
+          mimeType: part.mimeType,
+          size: part.data.length,
+          data: part.data,
+          ...link,
+        },
+        select: { id: true, kind: true, name: true, mimeType: true, size: true },
+      });
+      assets.push(asset);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not store the brand files.';
+    return NextResponse.json({ error: `Could not store the brand files. ${message}`.slice(0, 300) }, { status: 500 });
   }
 
   const counts = { guidelines: 0, logos: 0, fonts: 0, refs: 0 } as Record<string, number>;

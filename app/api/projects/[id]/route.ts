@@ -64,7 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data,
   });
   if (briefAssets) {
-    const synced = await syncBriefAssets(loaded.ownerEmail, loaded.id, briefAssets.profileId, briefAssets.assetIds);
+    const synced = await syncBriefAssets(loaded.ownerEmail, loaded.id, briefAssets.assetIds);
     if (!synced.ok) return NextResponse.json({ error: synced.error }, { status: 400 });
   }
   const full = await prisma.adProject.findFirst({ where: { id: loaded.id, ownerEmail: loaded.ownerEmail }, include: projectInclude });

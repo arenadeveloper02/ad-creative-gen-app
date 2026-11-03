@@ -250,7 +250,7 @@ export function parseProfile(body: Record<string, unknown>): ProfileInput | { er
     c1: cleanHex(body.c1, '#1B365D'),
     c2: cleanHex(body.c2, '#2E6DA4'),
     c3: cleanHex(body.c3, '#FFFFFF'),
-    assetIds: Array.isArray(body.assetIds) ? body.assetIds.filter(isId).slice(0, 20) : [],
+    assetIds: Array.isArray(body.assetIds) ? body.assetIds.filter(isId).slice(0, 40) : [],
     overwrite: body.overwrite === true,
   };
 }

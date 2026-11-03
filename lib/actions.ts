@@ -102,9 +102,10 @@ export async function attachAssetsToProfile(
       data: { profileId },
     });
   }
-  if (clones.length) {
-    await prisma.adAsset.createMany({
-      data: clones.map((row) => ({
+  // One row at a time. A single createMany of every logo, font and creative exceeds Postgres' query size and comes back as HTTP 500.
+  for (const row of clones) {
+    await prisma.adAsset.create({
+      data: {
         ownerEmail,
         profileId,
         kind: row.kind,
@@ -112,7 +113,7 @@ export async function attachAssetsToProfile(
         mimeType: row.mimeType,
         size: row.size,
         data: row.data,
-      })),
+      },
     });
   }
   return { ok: true };
@@ -132,69 +133,82 @@ export async function ensureProfileAssetsOnProject(
   });
   const have = new Set(projectAssets.map((row) => `${row.kind}|${row.name}|${row.size}`));
   const missing = profileAssets.filter((row) => !have.has(`${row.kind}|${row.name}|${row.size}`));
-  if (missing.length === 0) return;
-  await prisma.adAsset.createMany({
-    data: missing.map((row) => ({
-      ownerEmail,
-      projectId,
-      kind: row.kind,
-      name: row.name,
-      mimeType: row.mimeType,
-      size: row.size,
-      data: row.data,
-    })),
-  });
+  for (const row of missing) {
+    await prisma.adAsset.create({
+      data: {
+        ownerEmail,
+        projectId,
+        kind: row.kind,
+        name: row.name,
+        mimeType: row.mimeType,
+        size: row.size,
+        data: row.data,
+      },
+    });
+  }
+}
+
+function fingerprint(row: { kind: string; name: string; size: number }): string {
+  return `${row.kind}|${row.name}|${row.size}`;
 }
 
 /**
- * Makes the project's files match exactly the brief's current brand (e.g. Mahindra only).
- * Drops leftover copies from a previous company, then claims / copies the keep list.
+ * Makes the project's files match the brief's current brand.
+ * Claims or copies the keep-list first, then drops anything else (old Apple files, etc.).
+ * Never issues a Prisma `in: []` filter — that throws and surfaces as HTTP 500.
  */
 export async function syncBriefAssets(
   ownerEmail: string,
   projectId: string,
-  profileId: string | null,
   assetIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const unique = [...new Set(assetIds.filter(isId))];
+  const keepRows = unique.length
+    ? await prisma.adAsset.findMany({
+        where: { id: { in: unique }, ownerEmail },
+        select: { id: true, kind: true, name: true, mimeType: true, size: true, data: true, projectId: true, profileId: true },
+      })
+    : [];
 
-  // Project-only copies from older brands must go; profile-owned rows are only unlinked.
-  await prisma.adAsset.deleteMany({ where: { ownerEmail, projectId, profileId: null } });
-  await prisma.adAsset.updateMany({
-    where: { ownerEmail, projectId, NOT: { profileId: null } },
-    data: { projectId: null },
-  });
-
-  if (profileId) {
-    await ensureProfileAssetsOnProject(ownerEmail, profileId, projectId);
-  }
-
-  if (unique.length > 0) {
-    const claimed = await claimAssets(ownerEmail, unique, { projectId });
-    if (!claimed.ok && !profileId) return claimed;
-
-    const keepRows = await prisma.adAsset.findMany({
-      where: { id: { in: unique }, ownerEmail },
-      select: { kind: true, name: true, size: true },
+  const claimIds = keepRows.filter((row) => row.projectId === null && row.profileId === null).map((row) => row.id);
+  if (claimIds.length > 0) {
+    await prisma.adAsset.updateMany({
+      where: { id: { in: claimIds }, ownerEmail, projectId: null, profileId: null },
+      data: { projectId },
     });
-    if (keepRows.length > 0) {
-      const fingerprints = new Set(keepRows.map((row) => `${row.kind}|${row.name}|${row.size}`));
-      const onProject = await prisma.adAsset.findMany({
-        where: { ownerEmail, projectId },
-        select: { id: true, kind: true, name: true, size: true, profileId: true },
-      });
-      const drop = onProject.filter((row) => !fingerprints.has(`${row.kind}|${row.name}|${row.size}`));
-      if (drop.length > 0) {
-        await prisma.adAsset.deleteMany({
-          where: { id: { in: drop.filter((row) => row.profileId === null).map((row) => row.id) } },
-        });
-        await prisma.adAsset.updateMany({
-          where: { id: { in: drop.filter((row) => row.profileId !== null).map((row) => row.id) } },
-          data: { projectId: null },
-        });
-      }
-    }
   }
+
+  const already = await prisma.adAsset.findMany({
+    where: { ownerEmail, projectId },
+    select: { kind: true, name: true, size: true },
+  });
+  const have = new Set(already.map(fingerprint));
+  for (const row of keepRows) {
+    if (row.projectId === projectId || have.has(fingerprint(row))) continue;
+    await prisma.adAsset.create({
+      data: {
+        ownerEmail,
+        projectId,
+        kind: row.kind,
+        name: row.name,
+        mimeType: row.mimeType,
+        size: row.size,
+        data: row.data,
+      },
+    });
+    have.add(fingerprint(row));
+  }
+
+  const keepPrints = new Set(keepRows.map(fingerprint));
+  const onProject = await prisma.adAsset.findMany({
+    where: { ownerEmail, projectId },
+    select: { id: true, kind: true, name: true, size: true, profileId: true },
+  });
+  const drop = onProject.filter((row) => !keepPrints.has(fingerprint(row)));
+  const deleteIds = drop.filter((row) => row.profileId === null).map((row) => row.id);
+  const unlinkIds = drop.filter((row) => row.profileId !== null).map((row) => row.id);
+  if (deleteIds.length > 0) await prisma.adAsset.deleteMany({ where: { id: { in: deleteIds }, ownerEmail } });
+  if (unlinkIds.length > 0) await prisma.adAsset.updateMany({ where: { id: { in: unlinkIds }, ownerEmail }, data: { projectId: null } });
 
   return { ok: true };
 }

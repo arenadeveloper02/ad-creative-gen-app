@@ -53,7 +53,13 @@ export async function POST(req: Request): Promise<NextResponse> {
         },
       });
 
-  const claimed = await attachAssetsToProfile(email, profile.assetIds, saved.id);
+  let claimed: { ok: true } | { ok: false; error: string };
+  try {
+    claimed = await attachAssetsToProfile(email, profile.assetIds, saved.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not attach the brand files.';
+    return NextResponse.json({ error: `Could not save the profile files. ${message}`.slice(0, 300) }, { status: 500 });
+  }
   if (!claimed.ok) return NextResponse.json({ error: claimed.error }, { status: 400 });
   const full = await prisma.brandProfile.findFirst({ where: { id: saved.id, ownerEmail: email }, include: profileInclude });
   if (!full) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });

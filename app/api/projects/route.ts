@@ -45,7 +45,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       status: 'draft',
     },
   });
-  const synced = await syncBriefAssets(email, created.id, brief.profileId, brief.assetIds);
+  const synced = await syncBriefAssets(email, created.id, brief.assetIds);
   if (!synced.ok) {
     await prisma.adProject.delete({ where: { id: created.id } });
     return NextResponse.json({ error: synced.error }, { status: 400 });
