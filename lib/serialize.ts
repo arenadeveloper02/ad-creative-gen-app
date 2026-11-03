@@ -1,4 +1,5 @@
 import type { AdAsset, AdProject, AdVersion, BrandProfile } from '@prisma/client';
+import { parseRenderAssetIds } from '@/lib/guard';
 import type { AssetDTO, ProfileDTO, ProjectDTO, ProjectListItem, VersionDTO } from '@/lib/types';
 import type { Background, CopySource, Layout } from '@/lib/platforms';
 
@@ -75,6 +76,7 @@ export function serializeProject(row: AdProject & { assets: AssetRow[]; versions
     copyPrompt: row.copyPrompt,
     imageModel: row.imageModel,
     imageResolution: row.imageResolution,
+    renderAssetIds: parseRenderAssetIds(row.renderAssetIds),
     step: row.step,
     status: row.status,
     updatedAt: row.updatedAt.toISOString(),

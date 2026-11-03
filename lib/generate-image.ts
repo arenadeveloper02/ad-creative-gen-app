@@ -2,12 +2,13 @@ import type { AdAsset, AdProject, AdVersion } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { falKey, runFalJob } from '@/lib/fal';
 import { buildImageJob, canonicalImageModel, canonicalImageResolution, modelLabel, readImageUrl } from '@/lib/fal-models';
+import { parseRenderAssetIds } from '@/lib/guard';
 import { buildImagePrompt } from '@/lib/image-prompt';
 import { isRecord } from '@/lib/json';
 import { logUsage, reportFalUsage } from '@/lib/usage';
 import type { Layout } from '@/lib/platforms';
 
-type AssetMeta = Pick<AdAsset, 'id' | 'kind' | 'mimeType'>;
+type AssetMeta = Pick<AdAsset, 'id' | 'kind' | 'mimeType' | 'name' | 'size'>;
 
 const REF_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
@@ -37,12 +38,41 @@ async function uploadAssetToFal(assetId: string): Promise<string | null> {
   }
 }
 
-async function referenceUrls(assets: AssetMeta[]): Promise<{ urls: string[]; hasLogo: boolean; hasReferences: boolean }> {
-  const logos = assets.filter((a) => a.kind === 'logos' && REF_MIMES.has(a.mimeType)).slice(0, 1);
-  const refs = assets.filter((a) => a.kind === 'refs' && REF_MIMES.has(a.mimeType)).slice(0, 3);
+/**
+ * Resolves the user's "Use on ad" picks onto the project copies.
+ * Picks may still point at profile asset ids; match those by kind+name+size.
+ */
+async function resolveRenderAssets(assets: AssetMeta[], renderAssetIds: string[]): Promise<AssetMeta[]> {
+  if (renderAssetIds.length === 0) return assets;
+  const idSet = new Set(renderAssetIds);
+  const wanted = await prisma.adAsset.findMany({
+    where: { id: { in: renderAssetIds } },
+    select: { kind: true, name: true, size: true },
+  });
+  const fingerprints = new Set(wanted.map((row) => `${row.kind}|${row.name}|${row.size}`));
+  const matched = assets.filter((a) => idSet.has(a.id) || fingerprints.has(`${a.kind}|${a.name}|${a.size}`));
+  return matched.length > 0 ? matched : assets;
+}
+
+async function referenceUrls(
+  assets: AssetMeta[],
+  renderAssetIds: string[],
+): Promise<{ urls: string[]; hasLogo: boolean; hasReferences: boolean; fontNames: string[] }> {
+  const selected = await resolveRenderAssets(assets, renderAssetIds);
+  const logos = selected.filter((a) => a.kind === 'logos' && REF_MIMES.has(a.mimeType)).slice(0, 1);
+  const refs = selected.filter((a) => a.kind === 'refs' && REF_MIMES.has(a.mimeType)).slice(0, 3);
+  const fontNames = selected
+    .filter((a) => a.kind === 'fonts')
+    .map((a) => a.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' '))
+    .slice(0, 4);
   const uploaded = await Promise.all([...logos, ...refs].map((a) => uploadAssetToFal(a.id)));
   const urls = uploaded.filter((u): u is string => typeof u === 'string');
-  return { urls, hasLogo: logos.length > 0 && urls.length > 0, hasReferences: refs.length > 0 && urls.length > 0 };
+  return {
+    urls,
+    hasLogo: logos.length > 0 && urls.length > 0,
+    hasReferences: refs.length > 0 && urls.some((_, i) => i >= logos.length),
+    fontNames,
+  };
 }
 
 export interface GenerateImageResult {
@@ -102,8 +132,9 @@ export async function generateVersionImage(opts: {
     return { ok: imageUrl !== null, imageUrl, prompt, error };
   }
 
-  note(`${label}: checking the logo and reference files.`);
-  const refs = await referenceUrls(project.assets);
+  note(`${label}: checking the logo and reference files the user picked for this ad.`);
+  const pickedIds = parseRenderAssetIds(project.renderAssetIds);
+  const refs = await referenceUrls(project.assets, pickedIds);
   note(refs.urls.length > 0
     ? `${label}: ${refs.urls.length} brand file${refs.urls.length === 1 ? '' : 's'} uploaded for the model to see.`
     : `${label}: no logo or reference image on this ad, so the brief carries the look.`);
@@ -125,6 +156,7 @@ export async function generateVersionImage(opts: {
     layout: version.layout as Layout,
     hasLogo: refs.hasLogo,
     hasReferences: refs.hasReferences,
+    fontNames: refs.fontNames,
     variant: version.position,
   });
 

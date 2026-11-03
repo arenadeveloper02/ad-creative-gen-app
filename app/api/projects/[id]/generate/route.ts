@@ -16,7 +16,7 @@ export const maxDuration = 300;
 
 const projectWithAssets = {
   versions: { orderBy: { position: 'asc' as const } },
-  assets: { select: { id: true, kind: true, mimeType: true } },
+  assets: { select: { id: true, kind: true, mimeType: true, name: true, size: true } },
 };
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {

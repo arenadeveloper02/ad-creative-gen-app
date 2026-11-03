@@ -13,9 +13,9 @@ const FIELDS: { key: AssetKind; title: string; sub: string; accept: string; prom
     accept: '.pdf,.doc,.docx,.ppt,.pptx,.txt',
     prompt: 'Click or drop guideline documents',
   },
-  { key: 'logos', title: 'Logos', sub: 'PNG, SVG, JPG or WebP — auto-filled from guidelines, still editable', accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', prompt: 'Click or drop logo files' },
-  { key: 'fonts', title: 'Fonts', sub: 'TTF, OTF, WOFF or WOFF2 — auto-filled when the file includes fonts', accept: '.ttf,.otf,.woff,.woff2', prompt: 'Click or drop font files' },
-  { key: 'refs', title: 'Reference creatives', sub: 'Past ads or visuals — auto-filled from guidelines, still editable', accept: 'image/png,image/jpeg,image/webp,image/gif,.pdf', prompt: 'Click or drop reference images' },
+  { key: 'logos', title: 'Logos', sub: 'Tick On ad for the one logo that goes on the final image (one only)', accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', prompt: 'Click or drop logo files' },
+  { key: 'fonts', title: 'Fonts', sub: 'Tick On ad for fonts that should guide the look', accept: '.ttf,.otf,.woff,.woff2', prompt: 'Click or drop font files' },
+  { key: 'refs', title: 'Reference creatives', sub: 'Tick On ad for up to 3 creatives the image model should match', accept: 'image/png,image/jpeg,image/webp,image/gif,.pdf', prompt: 'Click or drop reference images' },
 ];
 
 export interface BriefPayload {
@@ -30,6 +30,16 @@ export interface BriefPayload {
   c2: string;
   c3: string;
   assetIds: string[];
+  renderAssetIds: string[];
+}
+
+/** Default "Use on ad" picks: one logo (Primary preferred), up to 3 refs, first 2 fonts. */
+function defaultRenderIds(list: AssetDTO[]): string[] {
+  const logos = list.filter((item) => item.kind === 'logos');
+  const primary = logos.find((item) => item.name.startsWith('Primary -')) ?? logos[0];
+  const refs = list.filter((item) => item.kind === 'refs').slice(0, 3);
+  const fonts = list.filter((item) => item.kind === 'fonts').slice(0, 2);
+  return [...(primary ? [primary.id] : []), ...fonts.map((item) => item.id), ...refs.map((item) => item.id)];
 }
 
 interface BriefStepProps {
@@ -106,6 +116,9 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const [c2, setC2] = useState(project?.c2 ?? '#2E6DA4');
   const [c3, setC3] = useState(project?.c3 ?? '#FFFFFF');
   const [assets, setAssets] = useState<AssetDTO[]>(project?.assets ?? []);
+  const [renderAssetIds, setRenderAssetIds] = useState<string[]>(
+    project?.renderAssetIds?.length ? project.renderAssetIds : defaultRenderIds(project?.assets ?? []),
+  );
   const [profileName, setProfileName] = useState('');
   const [status, setStatus] = useState('');
   const [statusKind, setStatusKind] = useState<'ok' | 'err' | ''>('');
@@ -136,6 +149,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     c2: string;
     c3: string;
     assets: AssetDTO[];
+    renderAssetIds: string[];
     profileId: string;
     lookupKey: string;
     aiIds: string[];
@@ -153,6 +167,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       c2,
       c3,
       assets,
+      renderAssetIds,
       profileId,
       lookupKey: lastLookupKey.current,
       aiIds: [...aiAssetIds.current],
@@ -176,6 +191,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setC2(draft.c2);
     setC3(draft.c3);
     setAssets(draft.assets);
+    setRenderAssetIds(draft.renderAssetIds);
     setProfileId(draft.profileId);
     lastLookupKey.current = draft.lookupKey;
     aiAssetIds.current = new Set(draft.aiIds);
@@ -199,6 +215,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     // A fresh tab starts empty: nothing from a previous company or saved profile carries over.
     setProfileId('__new__');
     setAssets([]);
+    setRenderAssetIds([]);
     aiAssetIds.current = new Set();
     lastLookupKey.current = '';
     setBrandName('');
@@ -247,6 +264,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setC2(next.c2);
     setC3(next.c3);
     setAssets(next.assets);
+    setRenderAssetIds(defaultRenderIds(next.assets));
   }
 
   async function fillBrandWithAi(force = false) {
@@ -264,6 +282,10 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setLookingUp(true);
     setStatus('');
     setStatusKind('');
+    // Drop the previous company's files immediately so Apple (etc.) never stays on screen during the new hunt.
+    setAssets([]);
+    setRenderAssetIds([]);
+    aiAssetIds.current = new Set();
 
     const res = await fetch('/api/brand-guidelines', {
       method: 'POST',
@@ -315,8 +337,10 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const found = Array.isArray(data.assets) ? data.assets.filter((item) => item && typeof item.id === 'string') : [];
     // Logos, fonts and creatives belong to this company only: everything from before is replaced.
     const nextAssets = found;
+    const nextRender = defaultRenderIds(nextAssets);
     aiAssetIds.current = new Set(found.map((item) => item.id));
     setAssets(nextAssets);
+    setRenderAssetIds(nextRender);
 
     const counts = data.counts ?? {};
     const bits: string[] = [];
@@ -386,7 +410,23 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         }
       }
     }
-    if (added.length) setAssets((current) => [...current, ...added]);
+    if (added.length) {
+      setAssets((current) => {
+        const next = [...current, ...added];
+        setRenderAssetIds((picked) => {
+          const merged = [...picked];
+          for (const item of added) {
+            if (item.kind === 'guidelines') continue;
+            if (merged.includes(item.id)) continue;
+            if (item.kind === 'logos' && merged.some((id) => next.some((a) => a.id === id && a.kind === 'logos'))) continue;
+            if (item.kind === 'refs' && merged.filter((id) => next.some((a) => a.id === id && a.kind === 'refs')).length >= 3) continue;
+            merged.push(item.id);
+          }
+          return merged;
+        });
+        return next;
+      });
+    }
     if (kind === 'guidelines' && !failed) {
       if (extractedCount > 0) {
         setStatus(`Guidelines saved. Prefilling ${extractedCount} logo, font or creative file${extractedCount === 1 ? '' : 's'} — you can still edit them.`);
@@ -401,11 +441,31 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
   async function removeAsset(id: string) {
     setAssets((current) => current.filter((item) => item.id !== id));
+    setRenderAssetIds((current) => current.filter((item) => item !== id));
+  }
+
+  function toggleRenderAsset(file: AssetDTO) {
+    setRenderAssetIds((current) => {
+      const on = current.includes(file.id);
+      if (file.kind === 'logos') {
+        // Only one logo on the final ad.
+        const withoutLogos = current.filter((id) => !assets.some((item) => item.id === id && item.kind === 'logos'));
+        return on ? withoutLogos : [...withoutLogos, file.id];
+      }
+      if (file.kind === 'refs') {
+        if (on) return current.filter((id) => id !== file.id);
+        const refIds = current.filter((id) => assets.some((item) => item.id === id && item.kind === 'refs'));
+        if (refIds.length >= 3) return [...current.filter((id) => !refIds.includes(id) || id === refIds[0] || id === refIds[1]), file.id];
+        return [...current, file.id];
+      }
+      if (on) return current.filter((id) => id !== file.id);
+      return [...current, file.id];
+    });
   }
 
   function draftPayload(): BriefPayload {
-    const ids = assets.filter((item) => !linked?.assets.some((owned) => owned.id === item.id)).map((item) => item.id);
-    return payload(ids);
+    // Exact keep set for this brand so the server can drop leftover files from a previous company.
+    return payload(assets.map((item) => item.id));
   }
 
   const onDraftRef = useRef(onDraft);
@@ -414,7 +474,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     onDraftRef.current(draftPayload());
     // draftPayload reads the fields listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [description, sceneNote, goal, brandName, product, profileId, c1, c2, c3, assets]);
+  }, [description, sceneNote, goal, brandName, product, profileId, c1, c2, c3, assets, renderAssetIds]);
 
   function payload(ids: string[]): BriefPayload {
     return {
@@ -429,6 +489,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       c2,
       c3,
       assetIds: ids,
+      renderAssetIds: renderAssetIds.filter((id) => ids.includes(id) || assets.some((item) => item.id === id)),
     };
   }
 
@@ -736,24 +797,28 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                   />
                 </label>
                 <ul className="filelist">
-                  {(grouped[field.key] ?? []).map((file) => (
-                    <li key={file.id}>
-                      {(() => {
-                        const split = splitVariant(file.name);
-                        return (
-                          <>
-                            <AssetThumb file={file} dark={split.variant === 'Reverse (white)'} />
-                            {split.variant && <span className={`variant v-${split.variant.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{split.variant}</span>}
-                            <span className="nm">{split.name}</span>
-                          </>
-                        );
-                      })()}
-                      <span className="sz">{fmtSize(file.size)}</span>
-                      <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
-                        ✕
-                      </button>
-                    </li>
-                  ))}
+                  {(grouped[field.key] ?? []).map((file) => {
+                    const split = splitVariant(file.name);
+                    const onAd = renderAssetIds.includes(file.id);
+                    const pickable = field.key === 'logos' || field.key === 'fonts' || field.key === 'refs';
+                    return (
+                      <li key={file.id}>
+                        <AssetThumb file={file} dark={split.variant === 'Reverse (white)'} />
+                        {split.variant && <span className={`variant v-${split.variant.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{split.variant}</span>}
+                        <span className="nm">{split.name}</span>
+                        {pickable && (
+                          <label className={`use-on-ad${onAd ? ' on' : ''}`} title="Use this file on the final ad">
+                            <input type="checkbox" checked={onAd} onChange={() => toggleRenderAsset(file)} />
+                            On ad
+                          </label>
+                        )}
+                        <span className="sz">{fmtSize(file.size)}</span>
+                        <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
+                          ✕
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}

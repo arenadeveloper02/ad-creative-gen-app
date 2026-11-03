@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentOwnerEmail } from '@/lib/arena-email';
-import { ensureProfileAssetsOnProject } from '@/lib/actions';
+import { syncBriefAssets } from '@/lib/actions';
 import { isId, parseBrief, parsePlatform } from '@/lib/guard';
 import { isRecord } from '@/lib/json';
 import { projectInclude, serializeProject } from '@/lib/serialize';
@@ -31,8 +31,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!isRecord(body)) return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
 
   const data: Record<string, string | number | null> = {};
-  if ('description' in body || 'goal' in body || 'brandName' in body) {
-    const brief = parseBrief({ ...loaded, ...body, assetIds: [] });
+  let briefAssets: { profileId: string | null; assetIds: string[] } | null = null;
+  if ('description' in body || 'goal' in body || 'brandName' in body || 'assetIds' in body || 'renderAssetIds' in body) {
+    const brief = parseBrief({ ...loaded, ...body, assetIds: Array.isArray(body.assetIds) ? body.assetIds : [] });
     if ('error' in brief) return NextResponse.json({ error: brief.error }, { status: 400 });
     data.description = brief.description;
     data.sceneNote = brief.sceneNote;
@@ -44,8 +45,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.c1 = brief.c1;
     data.c2 = brief.c2;
     data.c3 = brief.c3;
+    data.renderAssetIds = JSON.stringify(brief.renderAssetIds);
     const name = brief.product || brief.brandName;
     if (name) data.name = name.slice(0, 120);
+    briefAssets = { profileId: brief.profileId, assetIds: brief.assetIds };
   }
   if ('platform' in body || 'format' in body || 'tone' in body || 'copySource' in body || 'copyPrompt' in body || 'imageModel' in body || 'imageResolution' in body) {
     const platform = parsePlatform({ ...loaded, ...body });
@@ -56,17 +59,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.step = Math.min(3, Math.max(1, Math.round(body.step)));
   }
 
-  const updated = await prisma.adProject.update({
+  await prisma.adProject.update({
     where: { id: loaded.id },
     data,
-    include: projectInclude,
   });
-  if (typeof data.profileId === 'string' && data.profileId !== '') {
-    await ensureProfileAssetsOnProject(loaded.ownerEmail, data.profileId, loaded.id);
+  if (briefAssets) {
+    const synced = await syncBriefAssets(loaded.ownerEmail, loaded.id, briefAssets.profileId, briefAssets.assetIds);
+    if (!synced.ok) return NextResponse.json({ error: synced.error }, { status: 400 });
   }
-  const full = data.profileId
-    ? await prisma.adProject.findFirst({ where: { id: loaded.id, ownerEmail: loaded.ownerEmail }, include: projectInclude })
-    : updated;
+  const full = await prisma.adProject.findFirst({ where: { id: loaded.id, ownerEmail: loaded.ownerEmail }, include: projectInclude });
   if (!full) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
   return NextResponse.json(serializeProject(full));
 }

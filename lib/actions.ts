@@ -145,3 +145,56 @@ export async function ensureProfileAssetsOnProject(
     })),
   });
 }
+
+/**
+ * Makes the project's files match exactly the brief's current brand (e.g. Mahindra only).
+ * Drops leftover copies from a previous company, then claims / copies the keep list.
+ */
+export async function syncBriefAssets(
+  ownerEmail: string,
+  projectId: string,
+  profileId: string | null,
+  assetIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const unique = [...new Set(assetIds.filter(isId))];
+
+  // Project-only copies from older brands must go; profile-owned rows are only unlinked.
+  await prisma.adAsset.deleteMany({ where: { ownerEmail, projectId, profileId: null } });
+  await prisma.adAsset.updateMany({
+    where: { ownerEmail, projectId, NOT: { profileId: null } },
+    data: { projectId: null },
+  });
+
+  if (profileId) {
+    await ensureProfileAssetsOnProject(ownerEmail, profileId, projectId);
+  }
+
+  if (unique.length > 0) {
+    const claimed = await claimAssets(ownerEmail, unique, { projectId });
+    if (!claimed.ok && !profileId) return claimed;
+
+    const keepRows = await prisma.adAsset.findMany({
+      where: { id: { in: unique }, ownerEmail },
+      select: { kind: true, name: true, size: true },
+    });
+    if (keepRows.length > 0) {
+      const fingerprints = new Set(keepRows.map((row) => `${row.kind}|${row.name}|${row.size}`));
+      const onProject = await prisma.adAsset.findMany({
+        where: { ownerEmail, projectId },
+        select: { id: true, kind: true, name: true, size: true, profileId: true },
+      });
+      const drop = onProject.filter((row) => !fingerprints.has(`${row.kind}|${row.name}|${row.size}`));
+      if (drop.length > 0) {
+        await prisma.adAsset.deleteMany({
+          where: { id: { in: drop.filter((row) => row.profileId === null).map((row) => row.id) } },
+        });
+        await prisma.adAsset.updateMany({
+          where: { id: { in: drop.filter((row) => row.profileId !== null).map((row) => row.id) } },
+          data: { projectId: null },
+        });
+      }
+    }
+  }
+
+  return { ok: true };
+}

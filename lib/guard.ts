@@ -74,6 +74,7 @@ export interface BriefInput {
   c2: string;
   c3: string;
   assetIds: string[];
+  renderAssetIds: string[];
 }
 
 export function parseBrief(body: Record<string, unknown>): BriefInput | { error: string } {
@@ -88,7 +89,12 @@ export function parseBrief(body: Record<string, unknown>): BriefInput | { error:
   }
   const profileId = body.profileId === null || body.profileId === '' || body.profileId === undefined ? null : body.profileId;
   if (profileId !== null && !isId(profileId)) return { error: 'Invalid brand profile.' };
-  const assetIds = Array.isArray(body.assetIds) ? body.assetIds.filter(isId).slice(0, 20) : [];
+  const assetIds = Array.isArray(body.assetIds) ? body.assetIds.filter(isId).slice(0, 40) : [];
+  const renderAssetIds = Array.isArray(body.renderAssetIds)
+    ? body.renderAssetIds.filter(isId).slice(0, 20)
+    : typeof body.renderAssetIds === 'string'
+      ? parseRenderAssetIds(body.renderAssetIds)
+      : [];
   return {
     description,
     sceneNote,
@@ -101,7 +107,18 @@ export function parseBrief(body: Record<string, unknown>): BriefInput | { error:
     c2: cleanHex(body.c2, '#2E6DA4'),
     c3: cleanHex(body.c3, '#FFFFFF'),
     assetIds,
+    renderAssetIds,
   };
+}
+
+export function parseRenderAssetIds(raw: string | null | undefined): string[] {
+  if (!raw || raw.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter(isId).slice(0, 20) : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface PlatformInput {

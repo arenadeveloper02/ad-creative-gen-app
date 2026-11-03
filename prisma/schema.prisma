@@ -43,6 +43,8 @@ model AdProject {
   copyPrompt   String   @default("")
   imageModel      String   @default("nano-banana-pro")
   imageResolution String   @default("4K")
+  /** JSON array of asset ids the user picked for the final render (logos / fonts / refs). */
+  renderAssetIds  String   @default("[]")
   step         Int      @default(1)
   status       String   @default("draft")
   createdAt    DateTime @default(now())

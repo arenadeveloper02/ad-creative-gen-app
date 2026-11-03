@@ -80,6 +80,8 @@ export interface ProjectDTO {
   copyPrompt: string;
   imageModel: string;
   imageResolution: string;
+  /** Asset ids the user picked for the final render (logos / fonts / reference creatives). */
+  renderAssetIds: string[];
   step: number;
   status: string;
   updatedAt: string;

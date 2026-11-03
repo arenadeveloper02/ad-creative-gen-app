@@ -23,6 +23,13 @@
 .filelist .thumb.img.dark { background: #1f2430; }
 .filelist .thumb.img img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 3px; box-sizing: border-box; }
 .filelist .thumb.font { background: var(--aurora-glass2); font-size: 20px; font-weight: 600; line-height: 1; }
+.filelist .use-on-ad {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.03em; text-transform: uppercase; color: var(--aurora-text3); cursor: pointer; user-select: none;
+  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--aurora-line); background: var(--aurora-glass2);
+}
+.filelist .use-on-ad.on { border-color: var(--aurora-c1); color: var(--aurora-c1); background: color-mix(in srgb, var(--aurora-c1) 12%, transparent); }
+.filelist .use-on-ad input { margin: 0; accent-color: var(--aurora-c1); }
 .filelist .variant {
   flex: 0 0 auto; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
   padding: 2px 7px; border-radius: 999px; border: 1px solid var(--aurora-line); background: var(--aurora-glass2); color: var(--aurora-text2);

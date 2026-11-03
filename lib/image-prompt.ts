@@ -18,6 +18,7 @@ export interface ImagePromptInput {
   layout: Layout;
   hasLogo: boolean;
   hasReferences: boolean;
+  fontNames?: string[];
   variant: number;
 }
 
@@ -75,9 +76,12 @@ export function buildImagePrompt(input: ImagePromptInput): string {
   if (input.variant >= 2) {
     lines.push('This is another version in the same campaign as Version A and B. Keep the same format, aspect ratio, production quality, lighting family, scene world, and brand colour treatment. Change only the camera angle and framing so it still looks like the same ad set.');
   }
-  if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives.');
+  if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives the user chose for this ad.');
   if (input.hasLogo) {
-    lines.push(`The attached logo is the brand mark; place it once, small and legible, never distorted, only in ${LOGO_ZONES[input.layout]}. It must not touch or sit under the reserved text area.`);
+    lines.push(`The attached logo is the brand mark the user chose for this ad; place it once, small and legible, never distorted, only in ${LOGO_ZONES[input.layout]}. It must not touch or sit under the reserved text area.`);
+  }
+  if (input.fontNames && input.fontNames.length > 0) {
+    lines.push(`Brand type feel should echo these font names (do not render letters): ${input.fontNames.join(', ')}.`);
   }
   lines.push('Keep the reserved text area free of logos, signage, screens with lettering, faces, and busy detail so overlaid text stays readable.');
   lines.push('Photorealistic, high detail, commercial quality, correct anatomy and product proportions.');
