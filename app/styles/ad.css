@@ -37,7 +37,7 @@
 .brand-mode-chips { align-items: center; margin-bottom: 8px; }
 .brand-or {
   display: inline-flex; align-items: center; padding: 0 4px;
-  color: var(--aurora-text3); font-size: 13px; font-weight: 600; text-transform: lowercase;
+  color: var(--aurora-text3); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
 }
 .preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 36px; }
 .versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
