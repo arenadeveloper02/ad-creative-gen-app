@@ -566,7 +566,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             <button type="button" className={`chip${brandMode === 'ai' ? ' on' : ''}`} onClick={() => chooseNewProfile('ai')}>
               Auto-fill with AI
             </button>
-            <span className="brand-or" aria-hidden="true">or</span>
+            <span className="brand-or" aria-hidden="true">OR</span>
             <button
               type="button"
               className={`chip${brandMode === 'existing' ? ' on' : ''}`}
@@ -575,7 +575,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             >
               Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
             </button>
-            <span className="brand-or" aria-hidden="true">or</span>
+            <span className="brand-or" aria-hidden="true">OR</span>
             <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={() => chooseNewProfile('manual')}>
               Write manually
             </button>
