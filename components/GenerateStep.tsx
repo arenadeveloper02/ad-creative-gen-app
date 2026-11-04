@@ -25,12 +25,66 @@ interface GenerateStepProps {
   busy: boolean;
   thoughts: string;
   error: string | null;
-  onBack: () => void;
+  onBack: (note?: string) => void;
   onPatch: (version: VersionDTO) => void;
-  onRefresh: () => void;
+  onRefresh: (note?: string) => void;
   onAdd: (count: number) => void;
-  onRewrite: (id: string) => void;
+  onRewrite: (id: string, note?: string) => void;
   onImage: (id: string, editPrompt: string) => void;
+}
+
+type GuideKind = 'rewrite' | 'refresh' | 'back';
+
+function parseHex(value: string): string | null {
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(value.trim());
+  return match ? `#${match[1].toLowerCase()}` : null;
+}
+
+function ColorField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (hex: string) => void;
+}) {
+  const [hexDraft, setHexDraft] = useState(value);
+  useEffect(() => {
+    setHexDraft(value);
+  }, [value]);
+
+  return (
+    <div className="color-field">
+      <span className="color-field-label">{label}</span>
+      <input
+        id={id}
+        type="color"
+        value={parseHex(value) ?? '#000000'}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+      />
+      <input
+        type="text"
+        className="color-hex"
+        value={hexDraft}
+        spellCheck={false}
+        aria-label={`${label} hex`}
+        onChange={(e) => {
+          const next = e.target.value;
+          setHexDraft(next);
+          const parsed = parseHex(next);
+          if (parsed) onChange(parsed);
+        }}
+        onBlur={() => {
+          const parsed = parseHex(hexDraft);
+          setHexDraft(parsed ?? value);
+        }}
+      />
+    </div>
+  );
 }
 
 function letter(index: number): string {
@@ -68,6 +122,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [pendingExtra, setPendingExtra] = useState(0);
   /** Which on-ad text block is open in the left popup editor. */
   const [textEdit, setTextEdit] = useState<{ versionId: string; kind: TextKind } | null>(null);
+  const [guide, setGuide] = useState<GuideKind | null>(null);
+  const [guideText, setGuideText] = useState('');
   const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
@@ -278,14 +334,47 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     if (settled) setRedrawIds([]);
   }, [busy, redrawIds, project.versions, loadedUrls]);
 
-  function requestRefresh() {
+  function requestRefresh(note?: string) {
     const ids = project.versions.filter((version) => version.position < 2).map((version) => version.id);
     for (const version of project.versions) {
       if (isHttpsUrl(version.imageUrl) && ids.includes(version.id)) delete imageCache.current[version.imageUrl];
     }
     setRedrawIds(ids);
-    onRefresh();
+    onRefresh(note);
   }
+
+  function openGuide(kind: GuideKind) {
+    setGuide(kind);
+    setGuideText('');
+  }
+
+  function confirmGuide() {
+    const note = guideText.trim();
+    if (!guide || note === '') return;
+    if (guide === 'rewrite' && active) onRewrite(active.id, note);
+    else if (guide === 'refresh') requestRefresh(note);
+    else if (guide === 'back') onBack(note);
+    setGuide(null);
+    setGuideText('');
+  }
+
+  const guideCopy: Record<GuideKind, { title: string; hint: string; action: string }> = {
+    rewrite: {
+      title: 'Rewrite copy',
+      hint: 'What should the new headline and primary text emphasize on top of this ad?',
+      action: 'Rewrite with this note',
+    },
+    refresh: {
+      title: 'Regenerate images',
+      hint: 'What should look different in the new pictures? Keep the current copy unless you say otherwise.',
+      action: 'Regenerate with this note',
+    },
+    back: {
+      title: 'Change platform / brief',
+      hint: 'What do you want to change before regenerating? This note opens on the platform step.',
+      action: 'Continue with this note',
+    },
+  };
 
   function requestImage(id: string, editPrompt: string) {
     setRedrawIds([id]);
@@ -377,103 +466,132 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
 
         {!showCreating && active && (
           <div className="preview-grid">
-            <div>
-              <div className="versions">
+            <div className="gen-focus-col">
+              <div className="gen-focus-card">
+                <div className="vhead">
+                  <strong>Version {letter(active.position)}</strong>
+                  <span>{active.size.replace('x', '×')}</span>
+                </div>
+                {extraPending(active) ? (
+                  <div className="preview-wait" role="status" aria-label={`Version ${letter(active.position)} is still rendering`}>
+                    <span className="ad-spinner" aria-hidden="true" />
+                    <span className="preview-wait-label">Rendering…</span>
+                  </div>
+                ) : (
+                  <AdStage
+                    version={active}
+                    brand={project.brandName}
+                    image={isHttpsUrl(active.imageUrl) && loadedUrls[active.imageUrl] ? imageCache.current[active.imageUrl] : null}
+                    logo={logoReady ? logoCache.current : null}
+                    active
+                    editingKind={textEdit?.versionId === active.id ? textEdit.kind : null}
+                    onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
+                    onMove={(kind, x, y, width, height) => {
+                      onPatch({ ...active, ...positionPatch(kind, x, y, width, height) });
+                    }}
+                    onStyle={(kind, style) => {
+                      onPatch({ ...active, ...stylePatch(kind, style) });
+                    }}
+                    onText={(kind, value) => {
+                      onPatch({ ...active, ...textValuePatch(kind, value) });
+                    }}
+                    onOpenEdit={(kind) => {
+                      setTextEdit((current) =>
+                        current?.versionId === active.id && current.kind === kind
+                          ? null
+                          : { versionId: active.id, kind },
+                      );
+                    }}
+                    onSaveEdit={() => setTextEdit(null)}
+                  />
+                )}
+                <div className="vcopy">{active.primary}</div>
+                <p className="hint" style={{ marginTop: 6 }}>
+                  {extraPending(active)
+                    ? 'Still drawing this version…'
+                    : `${imageState(active)}. Click text on the preview to edit. Drag to reposition.`}
+                </p>
+                <label htmlFor={`edit-${active.id}`}>Update this image</label>
+                <p className="hint">Describe the change on top of the latest picture. Edits this version only.</p>
+                <textarea
+                  id={`edit-${active.id}`}
+                  className="short"
+                  value={edits[active.id] ?? ''}
+                  placeholder="e.g. Brighter daylight, remove the flowers on the table"
+                  onChange={(e) => setEdits((current) => ({ ...current, [active.id]: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  className="btn sm"
+                  style={{ marginTop: 8 }}
+                  disabled={busy || appendBusy || (edits[active.id] ?? '').trim() === ''}
+                  onClick={() => requestImage(active.id, edits[active.id] ?? '')}
+                >
+                  {busy && !appendBusy ? 'Working…' : 'Update this image'}
+                </button>
+              </div>
+
+              <div className="gen-rail" role="listbox" aria-label="Ad versions">
                 {project.versions.map((version) => (
-                  <div key={version.id} className={`vcard${version.id === active.id ? ' on' : ''}`} onClick={() => setActiveId(version.id)} role="button" tabIndex={0}>
-                    <div className="vhead">
-                      <strong>Version {letter(version.position)}</strong>
+                  <button
+                    key={version.id}
+                    type="button"
+                    role="option"
+                    aria-selected={version.id === active.id}
+                    className={`gen-rail-item${version.id === active.id ? ' on' : ''}`}
+                    onClick={() => setActiveId(version.id)}
+                  >
+                    <span className="gen-rail-label">
+                      <strong>{letter(version.position)}</strong>
                       <span>{version.size.replace('x', '×')}</span>
-                    </div>
+                    </span>
                     {extraPending(version) ? (
-                      <div className="preview-wait" role="status" aria-label={`Version ${letter(version.position)} is still rendering`}>
-                        <span className="ad-spinner" aria-hidden="true" />
-                        <span className="preview-wait-label">Rendering…</span>
+                      <div className="gen-rail-wait" aria-hidden="true">
+                        <span className="ad-spinner sm" />
                       </div>
                     ) : (
                       <AdStage
+                        compact
                         version={version}
                         brand={project.brandName}
                         image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
                         logo={logoReady ? logoCache.current : null}
                         active={version.id === active.id}
-                        editingKind={textEdit?.versionId === version.id ? textEdit.kind : null}
-                        onCanvas={(node) => { canvasRefs.current[version.id] = node; }}
-                        onMove={(kind, x, y, width, height) => {
-                          if (version.id !== active.id) setActiveId(version.id);
-                          onPatch({ ...version, ...positionPatch(kind, x, y, width, height) });
+                        editingKind={null}
+                        onCanvas={(node) => {
+                          if (version.id === active.id) return;
+                          canvasRefs.current[version.id] = node;
                         }}
-                        onStyle={(kind, style) => {
-                          if (version.id !== active.id) setActiveId(version.id);
-                          onPatch({ ...version, ...stylePatch(kind, style) });
-                        }}
-                        onText={(kind, value) => {
-                          if (version.id !== active.id) setActiveId(version.id);
-                          onPatch({ ...version, ...textValuePatch(kind, value) });
-                        }}
-                        onOpenEdit={(kind) => {
-                          setActiveId(version.id);
-                          // Same text again closes the popup (handy if it was opened by mistake).
-                          setTextEdit((current) =>
-                            current?.versionId === version.id && current.kind === kind
-                              ? null
-                              : { versionId: version.id, kind },
-                          );
-                        }}
-                        onSaveEdit={() => setTextEdit(null)}
+                        onMove={() => {}}
+                        onStyle={() => {}}
+                        onText={() => {}}
+                        onOpenEdit={() => setActiveId(version.id)}
+                        onSaveEdit={() => {}}
                       />
                     )}
-                    <div className="vcopy">{version.primary}</div>
-                    <div className="hint" style={{ marginTop: 6 }}>
-                      {extraPending(version)
-                        ? 'Same quality as A and B — still drawing…'
-                        : `${imageState(version)}. Drag headline, subline, or CTA on the preview to move them.`}
-                    </div>
-                    <label htmlFor={`edit-${version.id}`} className="hint" style={{ display: 'block', marginTop: 8 }}>What should change? Nano Banana Pro edits this image only.</label>
-                    <textarea
-                      id={`edit-${version.id}`}
-                      className="short"
-                      value={edits[version.id] ?? ''}
-                      placeholder="e.g. Remove the flowers on the table"
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setEdits((current) => ({ ...current, [version.id]: e.target.value }))}
-                    />
-                    <button
-                      type="button"
-                      className="btn sm"
-                      style={{ marginTop: 8 }}
-                      disabled={busy || appendBusy || (edits[version.id] ?? '').trim() === ''}
-                      onClick={(e) => { e.stopPropagation(); requestImage(version.id, edits[version.id] ?? ''); }}
-                    >
-                      {busy && !appendBusy ? 'Working…' : 'Update this image'}
-                    </button>
-                    <div className="vactions">
-                      <button type="button" disabled={!imageReady(version) || busy || appendBusy} onClick={(e) => { e.stopPropagation(); download(version); }}>PNG</button>
-                    </div>
-                  </div>
+                  </button>
                 ))}
                 {Array.from({ length: stillNeeded }, (_, index) => {
                   const position = project.versions.length + index;
                   return (
-                    <div key={`pending-${position}`} className="vcard">
-                      <div className="vhead"><strong>Version {letter(position)}</strong></div>
-                      <div className="preview-wait" role="status" aria-label={`Version ${letter(position)} is still rendering`}>
-                        <span className="ad-spinner" aria-hidden="true" />
-                        <span className="preview-wait-label">Rendering…</span>
+                    <div key={`pending-${position}`} className="gen-rail-item pending" aria-hidden="true">
+                      <span className="gen-rail-label"><strong>{letter(position)}</strong></span>
+                      <div className="gen-rail-wait">
+                        <span className="ad-spinner sm" />
                       </div>
-                      <div className="hint" style={{ marginTop: 6 }}>Same format and quality as A and B.</div>
                     </div>
                   );
                 })}
               </div>
+
               {appendBusy && (
                 <p className="hint creating-live" style={{ marginTop: 12 }}>
-                  Adding more versions — A and B stay as they are. Only the new cards show a loader.
+                  Adding more versions — selected ad stays as it is. New thumbs show a loader.
                 </p>
               )}
               <div className="more-row">
                 <div>
-                  <label htmlFor="moreCount">How many more versions?</label>
+                  <label htmlFor="moreCount">Add more versions</label>
                   <input
                     id="moreCount"
                     type="text"
@@ -485,7 +603,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     onChange={(e) => setMoreText(e.target.value.replace(/\D/g, '').slice(0, 2))}
                   />
                 </div>
-                <button type="button" className="btn sm" disabled={busy || appendBusy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) requestAdd(count); }}>
+                <button type="button" className="btn ghost sm" disabled={busy || appendBusy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) requestAdd(count); }}>
                   {appendBusy ? 'Adding…' : typedCount() === null ? 'Generate' : `Generate ${typedCount()}`}
                 </button>
               </div>
@@ -493,18 +611,17 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 {room === 0
                   ? `You already have ${MAX_VERSIONS} versions.`
                   : typedCount() === null
-                    ? `Type a number from 1 to ${room}, such as 4, 5, or 6.`
-                    : `Type a number, such as 4, 5, or 6. ${typedCount()} makes ${plannedLetters(typedCount() ?? 1)}. Up to ${MAX_VERSIONS} in total.`}
+                    ? `Type a number from 1 to ${room}.`
+                    : `${typedCount()} adds ${plannedLetters(typedCount() ?? 1)}. Up to ${MAX_VERSIONS} total.`}
               </p>
-              <div className="footer">
-                <button type="button" className="btn ghost sm" disabled={working} onClick={requestRefresh}>{working ? 'Working…' : 'Regenerate both images'}</button>
+              <div className="gen-secondary">
                 <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
                   Download all versions
                 </button>
               </div>
-              {!allReady && <p className="hint">Download opens after every image has finished.</p>}
+              {!allReady && <p className="hint">Download all opens after every image has finished.</p>}
               {zipNote && <p className="hint">{zipNote}</p>}
-              <div className="card" style={{ marginTop: 14, padding: 14 }}>
+              <div className="card gen-meta-card">
                 <h4>Primary text</h4>
                 <p>{active.primary}</p>
                 <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel} · {project.imageResolution}</p>
@@ -516,32 +633,33 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 )}
               </div>
             </div>
-            <div>
+
+            <div className="gen-side">
               {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
               <h4>Modify version {letter(active.position)}</h4>
-              <p className="hint">Click headline, subline or CTA on the preview to edit. Click the same text again to close the popup, or press Save.</p>
+              <p className="hint">Click headline, subline or CTA on the preview to edit type. Save or click the same text again to close.</p>
               <label htmlFor="mHeadline">Headline</label>
               <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value, showHeadline: true })} />
               <div className="text-toggle-row">
-                <button type="button" className="btn ghost sm" disabled={active.showHeadline === false} onClick={() => patch({ showHeadline: false })}>Remove from ad</button>
-                <button type="button" className="btn ghost sm" disabled={active.showHeadline !== false || active.headline.trim() === ''} onClick={() => patch({ showHeadline: true })}>Show on ad</button>
+                <button type="button" className="btn ghost sm" disabled={active.showHeadline === false} onClick={() => patch({ showHeadline: false })}>Hide</button>
+                <button type="button" className="btn ghost sm" disabled={active.showHeadline !== false || active.headline.trim() === ''} onClick={() => patch({ showHeadline: true })}>Show</button>
               </div>
-              <label htmlFor="mSub">Subline (optional)</label>
+              <label htmlFor="mSub">Subline</label>
               <input
                 id="mSub"
                 type="text"
                 value={active.sub}
-                placeholder="Leave blank if you do not want a subline"
+                placeholder="Optional"
                 onChange={(e) => {
                   const sub = e.target.value;
                   patch({ sub, showSub: sub.trim() !== '' ? true : active.showSub });
                 }}
               />
               <div className="text-toggle-row">
-                <button type="button" className="btn ghost sm" disabled={active.showSub === false || active.sub.trim() === ''} onClick={() => patch({ showSub: false })}>Remove from ad</button>
-                <button type="button" className="btn ghost sm" disabled={active.showSub !== false || active.sub.trim() === ''} onClick={() => patch({ showSub: true })}>Show on ad</button>
+                <button type="button" className="btn ghost sm" disabled={active.showSub === false || active.sub.trim() === ''} onClick={() => patch({ showSub: false })}>Hide</button>
+                <button type="button" className="btn ghost sm" disabled={active.showSub !== false || active.sub.trim() === ''} onClick={() => patch({ showSub: true })}>Show</button>
               </div>
-              <label htmlFor="mCta">CTA button</label>
+              <label htmlFor="mCta">CTA</label>
               <input id="mCta" type="text" value={active.cta} onChange={(e) => patch({ cta: e.target.value })} />
               <label className="show-toggle" htmlFor="showCta">
                 <input
@@ -552,7 +670,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 />
                 <span>Show CTA on the image</span>
               </label>
-              <p className="hint">Turn this off and the button is left off the ad.</p>
               <label htmlFor="mPrimary">Primary text</label>
               <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
               <label htmlFor="mLayout">Layout</label>
@@ -563,16 +680,16 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </select>
               <label htmlFor="mBg">Background</label>
               <select id="mBg" value={active.bg} onChange={(e) => patch({ bg: e.target.value as VersionDTO['bg'] })}>
-                <option value="photo">Photo — colour 1 button, colour 2 bar, colour 3 text</option>
-                <option value="gradient">Brand tint — colour 1 to colour 2 over the photo</option>
-                <option value="solid">Solid panel — colour 1 panel behind the text</option>
-                <option value="light">Light panel — white panel, colour 1 text</option>
+                <option value="photo">Photo</option>
+                <option value="gradient">Brand tint</option>
+                <option value="solid">Solid panel</option>
+                <option value="light">Light panel</option>
               </select>
               <label>Colors</label>
-              <div className="swatches">
-                <input type="color" value={active.c1} onChange={(e) => patch({ c1: e.target.value })} aria-label="Color 1" />
-                <input type="color" value={active.c2} onChange={(e) => patch({ c2: e.target.value })} aria-label="Color 2" />
-                <input type="color" value={active.c3} onChange={(e) => patch({ c3: e.target.value })} aria-label="Color 3" />
+              <div className="color-fields">
+                <ColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
+                <ColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
+                <ColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
               </div>
               <label htmlFor="mSize">Size</label>
               <select id="mSize" value={active.size} onChange={(e) => patch({ size: e.target.value })}>
@@ -580,14 +697,44 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   <option key={size} value={size}>{size.replace('x', ' × ')}</option>
                 ))}
               </select>
-              <div className="footer">
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onRewrite(active.id)}>Rewrite copy</button>
-                <button type="button" className="btn ghost sm" disabled={working} onClick={requestRefresh}>{working ? 'Working…' : 'Regenerate both images'}</button>
-                <button type="button" className="btn sm" disabled={busy || !imageReady(active)} onClick={() => download(active)}>Download PNG</button>
+
+              <div className="gen-actions">
+                <p className="gen-actions-label">Main actions</p>
+                <button type="button" className="btn sm" disabled={busy || !imageReady(active)} onClick={() => download(active)}>
+                  Download PNG
+                </button>
+                <button type="button" className="btn ghost sm" disabled={busy || !!guide} onClick={() => openGuide('rewrite')}>
+                  Rewrite copy
+                </button>
+                <button type="button" className="btn ghost sm" disabled={working || !!guide} onClick={() => openGuide('refresh')}>
+                  {working ? 'Working…' : 'Regenerate images'}
+                </button>
+                <button type="button" className="btn ghost sm" disabled={!!guide} onClick={() => openGuide('back')}>
+                  Change platform / brief
+                </button>
               </div>
-              <div className="footer" style={{ justifyContent: 'flex-start' }}>
-                <button type="button" className="btn ghost sm" onClick={onBack}>Change platform / brief</button>
-              </div>
+
+              {guide && (
+                <div className="guide-panel" role="dialog" aria-label={guideCopy[guide].title}>
+                  <h4>{guideCopy[guide].title}</h4>
+                  <p className="hint">{guideCopy[guide].hint}</p>
+                  <textarea
+                    className="short"
+                    value={guideText}
+                    autoFocus
+                    placeholder="Be specific — this shapes the next result"
+                    onChange={(e) => setGuideText(e.target.value)}
+                  />
+                  <div className="guide-panel-actions">
+                    <button type="button" className="btn ghost sm" onClick={() => { setGuide(null); setGuideText(''); }}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn sm" disabled={guideText.trim() === '' || busy || working} onClick={confirmGuide}>
+                      {guideCopy[guide].action}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -603,6 +750,7 @@ function AdStage({
   logo,
   active,
   editingKind,
+  compact = false,
   onCanvas,
   onMove,
   onStyle,
@@ -616,6 +764,7 @@ function AdStage({
   logo: HTMLImageElement | null;
   active: boolean;
   editingKind: TextKind | null;
+  compact?: boolean;
   onCanvas: (node: HTMLCanvasElement | null) => void;
   onMove: (kind: TextKind, x: number, y: number, width: number, height: number) => void;
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
@@ -665,8 +814,8 @@ function AdStage({
   const sizeLabel = editStyle ? Math.round(editStyle.scale * 100) : 100;
   const trackLabel = editStyle ? Math.round(editStyle.track * 100) : 0;
   const leadLabel = editStyle ? Math.round(editStyle.lead * 100) : 100;
-  const popW = 236;
-  const popH = 320;
+  const popW = 260;
+  const popH = 360;
 
   function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -766,7 +915,7 @@ function AdStage({
   const popTop = popPos?.y ?? defaultPop.y;
 
   return (
-    <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}${editingKind ? ' editing' : ''}`}>
+    <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}${editingKind ? ' editing' : ''}${compact ? ' compact' : ''}`}>
       <div ref={frameRef} className="ad-stage-frame">
         <canvas
           ref={(node) => {
@@ -774,7 +923,7 @@ function AdStage({
             onCanvas(node);
           }}
         />
-        {boxes.map((box) => (
+        {!compact && boxes.map((box) => (
           <div
             key={box.kind}
             className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}${editingKind === box.kind ? ' selected' : ''}`}
@@ -797,7 +946,7 @@ function AdStage({
           </div>
         ))}
       </div>
-      {editingKind && editBox && editStyle && (
+      {!compact && editingKind && editBox && editStyle && (
         <div
           className="text-edit-pop"
           style={{ left: popLeft, top: popTop, width: popW }}
@@ -824,55 +973,62 @@ function AdStage({
             onChange={(e) => onText(editingKind, e.target.value)}
             placeholder={editingKind === 'sub' ? 'Optional subline' : undefined}
           />
-          <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
-            <button
-              type="button"
-              className={`text-style-btn${editStyle.bold ? ' on' : ''}`}
-              aria-pressed={editStyle.bold}
-              title="Bold"
-              onClick={() => onStyle(editingKind, { bold: !editStyle.bold })}
-            >
-              <strong>B</strong>
-            </button>
-            <button
-              type="button"
-              className={`text-style-btn italic${editStyle.italic ? ' on' : ''}`}
-              aria-pressed={editStyle.italic}
-              title="Italic"
-              onClick={() => onStyle(editingKind, { italic: !editStyle.italic })}
-            >
-              I
-            </button>
-            <span className="text-style-sep" aria-hidden="true" />
-            <button
-              type="button"
-              className="text-style-btn"
-              title="Smaller"
-              disabled={editStyle.scale <= 0.7}
-              onClick={() => onStyle(editingKind, { scale: editStyle.scale - 0.05 })}
-            >
-              −
-            </button>
-            <span className="text-style-size" aria-live="polite">{sizeLabel}</span>
-            <button
-              type="button"
-              className="text-style-btn"
-              title="Larger"
-              disabled={editStyle.scale >= 1.6}
-              onClick={() => onStyle(editingKind, { scale: editStyle.scale + 0.05 })}
-            >
-              +
-            </button>
+          <div className="text-edit-pop-section">
+            <span className="text-edit-pop-section-label">Weight &amp; style</span>
+            <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
+              <button
+                type="button"
+                className={`text-style-btn${editStyle.bold ? ' on' : ''}`}
+                aria-pressed={editStyle.bold}
+                title="Bold"
+                onClick={() => onStyle(editingKind, { bold: !editStyle.bold })}
+              >
+                <strong>B</strong>
+              </button>
+              <button
+                type="button"
+                className={`text-style-btn italic${editStyle.italic ? ' on' : ''}`}
+                aria-pressed={editStyle.italic}
+                title="Italic"
+                onClick={() => onStyle(editingKind, { italic: !editStyle.italic })}
+              >
+                I
+              </button>
+            </div>
           </div>
           <div className="text-edit-pop-row">
-            <span className="text-edit-pop-label">Letter space</span>
+            <span className="text-edit-pop-label">Size</span>
+            <div className="text-edit-pop-tools">
+              <button
+                type="button"
+                className="text-style-btn"
+                title="Smaller"
+                disabled={editStyle.scale <= 0.7}
+                onClick={() => onStyle(editingKind, { scale: Math.round((editStyle.scale - 0.05) * 100) / 100 })}
+              >
+                −
+              </button>
+              <span className="text-style-size" aria-live="polite">{sizeLabel}%</span>
+              <button
+                type="button"
+                className="text-style-btn"
+                title="Larger"
+                disabled={editStyle.scale >= 1.6}
+                onClick={() => onStyle(editingKind, { scale: Math.round((editStyle.scale + 0.05) * 100) / 100 })}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="text-edit-pop-row">
+            <span className="text-edit-pop-label">Letter spacing</span>
             <div className="text-edit-pop-tools">
               <button
                 type="button"
                 className="text-style-btn"
                 title="Tighter"
                 disabled={editStyle.track <= 0}
-                onClick={() => onStyle(editingKind, { track: editStyle.track - 0.01 })}
+                onClick={() => onStyle(editingKind, { track: Math.round((editStyle.track - 0.01) * 100) / 100 })}
               >
                 −
               </button>
@@ -882,40 +1038,41 @@ function AdStage({
                 className="text-style-btn"
                 title="Looser"
                 disabled={editStyle.track >= 0.25}
-                onClick={() => onStyle(editingKind, { track: editStyle.track + 0.01 })}
+                onClick={() => onStyle(editingKind, { track: Math.round((editStyle.track + 0.01) * 100) / 100 })}
               >
                 +
               </button>
             </div>
           </div>
           <div className="text-edit-pop-row">
-            <span className="text-edit-pop-label">Line gap</span>
+            <span className="text-edit-pop-label">Line height</span>
             <div className="text-edit-pop-tools">
               <button
                 type="button"
                 className="text-style-btn"
                 title="Tighter lines"
                 disabled={editStyle.lead <= 0.85}
-                onClick={() => onStyle(editingKind, { lead: editStyle.lead - 0.05 })}
+                onClick={() => onStyle(editingKind, { lead: Math.round((editStyle.lead - 0.05) * 100) / 100 })}
               >
                 −
               </button>
-              <span className="text-style-size" aria-live="polite">{leadLabel}</span>
+              <span className="text-style-size" aria-live="polite">{leadLabel}%</span>
               <button
                 type="button"
                 className="text-style-btn"
                 title="More line space"
                 disabled={editStyle.lead >= 1.6}
-                onClick={() => onStyle(editingKind, { lead: editStyle.lead + 0.05 })}
+                onClick={() => onStyle(editingKind, { lead: Math.round((editStyle.lead + 0.05) * 100) / 100 })}
               >
                 +
               </button>
             </div>
           </div>
-          <p className="hint text-edit-pop-hint">Drag the grey bar to move this panel. Click the same text again to close without Save.</p>
-          <button type="button" className="btn sm text-edit-pop-save" onClick={onSaveEdit}>
-            Save
-          </button>
+          <div className="text-edit-pop-footer">
+            <button type="button" className="btn sm text-edit-pop-save" onClick={onSaveEdit}>
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

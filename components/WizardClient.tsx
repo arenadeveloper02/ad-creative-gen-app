@@ -58,6 +58,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [thoughts, setThoughts] = useState('');
+  const [returnNote, setReturnNote] = useState<string | null>(null);
   const saveTimer = useRef<number | null>(null);
   const draftTimer = useRef<number | null>(null);
   const platformTimer = useRef<number | null>(null);
@@ -346,7 +347,16 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
         <BriefStep project={project} profiles={profiles} saving={saving} error={error} onContinue={(data) => void saveBrief(data)} onDraft={queueBrief} onProfiles={setProfiles} />
       )}
       {step === 2 && project && (
-        <PlatformStep project={project} saving={saving} error={error} onBack={() => goto(1)} onGenerate={(data) => void generate(data)} onDraft={queuePlatform} onPreview={previewCopy} />
+        <PlatformStep
+          project={project}
+          saving={saving}
+          error={error}
+          returnNote={returnNote}
+          onBack={() => goto(1)}
+          onGenerate={(data) => void generate(data)}
+          onDraft={queuePlatform}
+          onPreview={previewCopy}
+        />
       )}
       {step === 3 && project && (
         <GenerateStep
@@ -355,11 +365,14 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           busy={busy}
           thoughts={thoughts}
           error={error}
-          onBack={() => goto(2)}
+          onBack={(note) => {
+            setReturnNote(note?.trim() ? note.trim() : null);
+            goto(2);
+          }}
           onPatch={queuePatch}
-          onRefresh={() => void mutateWithThoughts({ mode: 'refresh' })}
+          onRefresh={(note) => void mutateWithThoughts({ mode: 'refresh', editPrompt: note ?? '' })}
           onAdd={(count) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append', count })}
-          onRewrite={(id) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id })}
+          onRewrite={(id, note) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id, note: note ?? '' })}
           onImage={(id, editPrompt) => void mutateWithThoughts({ mode: 'image', versionId: id, editPrompt })}
         />
       )}

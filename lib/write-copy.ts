@@ -55,7 +55,7 @@ function readVersions(text: string, count: number): WrittenLine[] | null {
   return lines.length >= count ? lines.slice(0, count) : null;
 }
 
-function briefText(project: AdProject, count: number, currentHeadline?: string): string {
+function briefText(project: AdProject, count: number, currentHeadline?: string, guidance?: string): string {
   const ask = project.copyPrompt.trim() || project.description.trim() || `Write an ad for ${project.product || project.brandName || 'the product'}.`;
   const lines = [
     `Write ${count} version${count === 1 ? '' : 's'} of the ad copy.`,
@@ -70,6 +70,9 @@ function briefText(project: AdProject, count: number, currentHeadline?: string):
   ];
   if (project.avoid.trim()) lines.push(`Avoid: ${project.avoid.trim()}`);
   if (currentHeadline) lines.push(`Already used headlines: ${currentHeadline}. Write different ones.`);
+  if (guidance?.trim()) {
+    lines.push(`User guidance on top of the latest ad — follow this closely: ${guidance.trim()}`);
+  }
   return lines.join('\n');
 }
 
@@ -78,9 +81,14 @@ export async function writeAdCopy(opts: {
   project: AdProject;
   count: number;
   currentHeadline?: string;
+  guidance?: string;
   ownerEmail: string;
 }): Promise<{ ok: true; lines: WrittenLine[] } | { ok: false; error: string }> {
-  const run = await runFalJob(LLM_ENDPOINT, buildLlmInput(SYSTEM, briefText(opts.project, opts.count, opts.currentHeadline)), 60000);
+  const run = await runFalJob(
+    LLM_ENDPOINT,
+    buildLlmInput(SYSTEM, briefText(opts.project, opts.count, opts.currentHeadline, opts.guidance)),
+    60000,
+  );
   if (!run.ok) return { ok: false, error: run.error ?? 'The copy model failed.' };
   const text = findOutput(run.output);
   const lines = text ? readVersions(text, opts.count) : null;

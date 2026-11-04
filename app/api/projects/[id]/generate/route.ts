@@ -44,13 +44,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     subline: project.subline,
   };
 
-  async function resolveDrafts(count: number, startIndex: number, currentHeadline?: string): Promise<{ ok: true; drafts: VersionDraft[] } | { ok: false; error: string }> {
+  async function resolveDrafts(
+    count: number,
+    startIndex: number,
+    currentHeadline?: string,
+    guidance?: string,
+  ): Promise<{ ok: true; drafts: VersionDraft[] } | { ok: false; error: string }> {
     if (input.copySource !== 'ai') {
       return { ok: true, drafts: Array.from({ length: count }, (_, index) => draftVersion(input, startIndex + index, owned.format)) };
     }
     const cfg = falConfigError();
     if (cfg) return { ok: false, error: cfg };
-    const written = await writeAdCopy({ project: owned, count, currentHeadline, ownerEmail: email });
+    const written = await writeAdCopy({ project: owned, count, currentHeadline, guidance, ownerEmail: email });
     if (!written.ok) return written;
     return {
       ok: true,
@@ -67,7 +72,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!isId(body.versionId)) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
     const version = project.versions.find((item) => item.id === body.versionId);
     if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
-    const resolved = await resolveDrafts(1, version.position + 1, version.headline);
+    const guidance = cleanText(body.note ?? body.guidance, 1000);
+    const resolved = await resolveDrafts(1, version.position + 1, version.headline, guidance || undefined);
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 502 });
     const draft = resolved.drafts[0];
     await prisma.adVersion.update({ where: { id: version.id }, data: { headline: draft.headline, sub: draft.sub, primary: draft.primary } });
@@ -94,15 +100,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (cfg) return NextResponse.json({ error: cfg }, { status: 500 });
     const keep = project.versions.filter((item) => item.position < 2);
     if (keep.length === 0) return NextResponse.json({ error: 'Generate the ad before refreshing the images.' }, { status: 400 });
+    const editPrompt = cleanText(body.editPrompt ?? body.note ?? body.guidance, 1000);
     if (body.stream === true) {
       return streamGeneration({
-        intro: 'Redrawing the pictures on Version A and B. The copy, colours, and layout stay as they are.',
+        intro: [
+          'Redrawing the pictures on Version A and B. The copy, colours, and layout stay as they are.',
+          editPrompt ? `Change asked for: ${editPrompt}` : '',
+        ].filter(Boolean).join('\n'),
         versions: keep,
         project,
         ownerEmail: email,
+        editPrompt,
       });
     }
-    const results = await Promise.all(keep.map((version) => generateVersionImage({ project, version, ownerEmail: email })));
+    const results = await Promise.all(keep.map((version) => generateVersionImage({ project, version, ownerEmail: email, editPrompt })));
     const failed = results.find((item) => !item.ok);
     if (failed && results.every((item) => !item.ok)) {
       return NextResponse.json({ error: failed.error ?? 'Image generation failed.' }, { status: 502 });

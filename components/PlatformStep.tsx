@@ -36,13 +36,14 @@ interface PlatformStepProps {
   project: ProjectDTO;
   saving: boolean;
   error: string | null;
+  returnNote?: string | null;
   onBack: () => void;
   onGenerate: (data: PlatformPayload) => void;
   onDraft: (data: PlatformPayload) => void;
   onPreview: (data: PlatformPayload) => Promise<{ ok: true; versions: { headline: string; sub: string; primary: string }[] } | { ok: false; error: string }>;
 }
 
-export default function PlatformStep({ project, saving, error, onBack, onGenerate, onDraft, onPreview }: PlatformStepProps) {
+export default function PlatformStep({ project, saving, error, returnNote, onBack, onGenerate, onDraft, onPreview }: PlatformStepProps) {
   const [platform, setPlatform] = useState(project.platform);
   const formats = PLATFORMS[platform] ?? PLATFORMS['Meta (Facebook/Instagram)'];
   const [format, setFormat] = useState(formats.includes(project.format) ? project.format : formats[0]);
@@ -118,6 +119,11 @@ export default function PlatformStep({ project, saving, error, onBack, onGenerat
       <div className="card">
         <h3>Where will this ad run?</h3>
         <p className="sub">Platform drives size, text limits, and visual style.</p>
+        {returnNote?.trim() ? (
+          <div className="notice" role="status">
+            From your last ad — change this: {returnNote.trim()}
+          </div>
+        ) : null}
 
         <label>Platform</label>
         <div className="chips">
