@@ -49,6 +49,8 @@ export interface VersionDTO {
   subY: number | null;
   ctaX: number | null;
   ctaY: number | null;
+  logoX: number | null;
+  logoY: number | null;
   showHeadline: boolean;
   showSub: boolean;
   showCta: boolean;

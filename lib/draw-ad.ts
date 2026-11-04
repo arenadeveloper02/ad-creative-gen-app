@@ -240,18 +240,23 @@ export function drawAd(
     ctx.globalAlpha = 1;
   }
 
-  // Brand mark — known bounds, drawn before copy so collision can clear it.
+  // Brand mark — Brief-selected logo only. Default slot, or user-dragged logoX/logoY.
   const slot = logoSlot(layout, width, height);
   let logoBox: ZoneRect | null = null;
   if (logo) {
-    logoBox = fitInside(slot, logo.naturalWidth, logo.naturalHeight);
-    if (logoBox.w > 0 && logoBox.h > 0) {
+    const fitted = fitInside(slot, logo.naturalWidth, logo.naturalHeight);
+    if (fitted.w > 0 && fitted.h > 0) {
+      const x = version.logoX != null
+        ? Math.min(width - fitted.w, Math.max(0, version.logoX * width))
+        : fitted.x;
+      const y = version.logoY != null
+        ? Math.min(height - fitted.h, Math.max(0, version.logoY * height))
+        : fitted.y;
+      logoBox = { x, y, w: fitted.w, h: fitted.h };
       ctx.save();
       ctx.globalAlpha = 1;
       ctx.drawImage(logo, logoBox.x, logoBox.y, logoBox.w, logoBox.h);
       ctx.restore();
-    } else {
-      logoBox = null;
     }
   }
 
@@ -456,5 +461,7 @@ export function drawAd(
     ctx.textBaseline = 'alphabetic';
   }
 
+  // Logo handle last so the UI can drag the same mark the canvas painted.
+  if (logoBox) boxes.push({ kind: 'logo', x: logoBox.x, y: logoBox.y, w: logoBox.w, h: logoBox.h });
   return boxes;
 }

@@ -43,6 +43,8 @@ function versionDTO(row: AdVersion): VersionDTO {
     subY: row.subY,
     ctaX: row.ctaX,
     ctaY: row.ctaY,
+    logoX: row.logoX ?? null,
+    logoY: row.logoY ?? null,
     showHeadline: row.showHeadline,
     showSub: row.showSub,
     showCta: row.showCta,

@@ -119,6 +119,9 @@ model AdVersion {
   subY         Float?
   ctaX         Float?
   ctaY         Float?
+  // Normalized 0–1 position for the Brief-selected brand logo. Null = layout default slot.
+  logoX        Float?
+  logoY        Float?
   showHeadline Boolean  @default(true)
   showSub      Boolean  @default(true)
   showCta      Boolean  @default(true)

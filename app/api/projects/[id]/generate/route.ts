@@ -158,6 +158,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           subY: null,
           ctaX: null,
           ctaY: null,
+          logoX: null,
+          logoY: null,
           showHeadline: true,
           showSub: true,
           showCta: true,

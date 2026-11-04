@@ -176,6 +176,8 @@ export interface VersionPatch {
   subY?: number | null;
   ctaX?: number | null;
   ctaY?: number | null;
+  logoX?: number | null;
+  logoY?: number | null;
   showHeadline?: boolean;
   showSub?: boolean;
   showCta?: boolean;
@@ -244,12 +246,16 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   const sy = cleanCoord(body.subY);
   const cx = cleanCoord(body.ctaX);
   const cy = cleanCoord(body.ctaY);
+  const lx = cleanCoord(body.logoX);
+  const ly = cleanCoord(body.logoY);
   if (hx !== undefined) patch.headlineX = hx;
   if (hy !== undefined) patch.headlineY = hy;
   if (sx !== undefined) patch.subX = sx;
   if (sy !== undefined) patch.subY = sy;
   if (cx !== undefined) patch.ctaX = cx;
   if (cy !== undefined) patch.ctaY = cy;
+  if (lx !== undefined) patch.logoX = lx;
+  if (ly !== undefined) patch.logoY = ly;
   if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
   if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;
   if (typeof body.showCta === 'boolean') patch.showCta = body.showCta;

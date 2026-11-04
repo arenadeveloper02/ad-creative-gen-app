@@ -1,8 +1,8 @@
 import type { VersionDTO } from '@/lib/types';
 
-export type TextKind = 'headline' | 'sub' | 'cta';
+export type TextKind = 'headline' | 'sub' | 'cta' | 'logo';
 
-/** A painted text block in canvas pixels. Returned by drawAd so handles match the real text. */
+/** A painted block in canvas pixels. Returned by drawAd so handles match the real art. */
 export interface TextBox {
   kind: TextKind;
   x: number;
@@ -46,7 +46,8 @@ export function positionPatch(kind: TextKind, x: number, y: number, width: numbe
   const ny = clamp01(y / height);
   if (kind === 'headline') return { headlineX: nx, headlineY: ny };
   if (kind === 'sub') return { subX: nx, subY: ny };
-  return { ctaX: nx, ctaY: ny };
+  if (kind === 'cta') return { ctaX: nx, ctaY: ny };
+  return { logoX: nx, logoY: ny };
 }
 
 export function readTextStyle(version: VersionDTO, kind: TextKind): TextStyle {
@@ -68,13 +69,16 @@ export function readTextStyle(version: VersionDTO, kind: TextKind): TextStyle {
       lead: clampTextLead(version.subLead ?? 1),
     };
   }
-  return {
-    bold: version.ctaBold !== false,
-    italic: version.ctaItalic === true,
-    scale: clampTextScale(version.ctaScale ?? 1),
-    track: clampTextTrack(version.ctaTrack ?? 0),
-    lead: clampTextLead(version.ctaLead ?? 1),
-  };
+  if (kind === 'cta') {
+    return {
+      bold: version.ctaBold !== false,
+      italic: version.ctaItalic === true,
+      scale: clampTextScale(version.ctaScale ?? 1),
+      track: clampTextTrack(version.ctaTrack ?? 0),
+      lead: clampTextLead(version.ctaLead ?? 1),
+    };
+  }
+  return { bold: false, italic: false, scale: 1, track: 0, lead: 1 };
 }
 
 export function stylePatch(kind: TextKind, style: Partial<TextStyle>): Partial<VersionDTO> {
@@ -96,19 +100,23 @@ export function stylePatch(kind: TextKind, style: Partial<TextStyle>): Partial<V
       ...(typeof style.lead === 'number' ? { subLead: clampTextLead(style.lead) } : {}),
     };
   }
-  return {
-    ...(typeof style.bold === 'boolean' ? { ctaBold: style.bold } : {}),
-    ...(typeof style.italic === 'boolean' ? { ctaItalic: style.italic } : {}),
-    ...(typeof style.scale === 'number' ? { ctaScale: clampTextScale(style.scale) } : {}),
-    ...(typeof style.track === 'number' ? { ctaTrack: clampTextTrack(style.track) } : {}),
-    ...(typeof style.lead === 'number' ? { ctaLead: clampTextLead(style.lead) } : {}),
-  };
+  if (kind === 'cta') {
+    return {
+      ...(typeof style.bold === 'boolean' ? { ctaBold: style.bold } : {}),
+      ...(typeof style.italic === 'boolean' ? { ctaItalic: style.italic } : {}),
+      ...(typeof style.scale === 'number' ? { ctaScale: clampTextScale(style.scale) } : {}),
+      ...(typeof style.track === 'number' ? { ctaTrack: clampTextTrack(style.track) } : {}),
+      ...(typeof style.lead === 'number' ? { ctaLead: clampTextLead(style.lead) } : {}),
+    };
+  }
+  return {};
 }
 
 export function readTextValue(version: VersionDTO, kind: TextKind): string {
   if (kind === 'headline') return version.headline;
   if (kind === 'sub') return version.sub;
-  return version.cta;
+  if (kind === 'cta') return version.cta;
+  return '';
 }
 
 export function textValuePatch(kind: TextKind, value: string): Partial<VersionDTO> {
@@ -118,13 +126,15 @@ export function textValuePatch(kind: TextKind, value: string): Partial<VersionDT
     if (value.trim() !== '') patch.showSub = true;
     return patch;
   }
-  return { cta: value };
+  if (kind === 'cta') return { cta: value };
+  return {};
 }
 
 export function textKindLabel(kind: TextKind): string {
   if (kind === 'headline') return 'Headline';
   if (kind === 'sub') return 'Subline';
-  return 'CTA';
+  if (kind === 'cta') return 'CTA';
+  return 'Logo';
 }
 
 /**

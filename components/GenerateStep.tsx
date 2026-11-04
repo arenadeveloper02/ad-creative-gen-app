@@ -570,6 +570,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       onPatch({ ...active, ...textValuePatch(kind, value) });
                     }}
                     onOpenEdit={(kind) => {
+                      if (kind === 'logo') {
+                        setTextEdit(null);
+                        return;
+                      }
                       setTextEdit((current) =>
                         current?.versionId === active.id && current.kind === kind
                           ? null
@@ -582,7 +586,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <p className="hint gen-focus-status">
                   {extraPending(active)
                     ? 'Still drawing this version…'
-                    : `${imageState(active)}. Click text to edit · drag to move.`}
+                    : `${imageState(active)}. Drag logo or text to move · click text to edit.`}
                 </p>
                 <div className="gen-image-edit">
                   <label htmlFor={`edit-${active.id}`}>Update this image</label>
