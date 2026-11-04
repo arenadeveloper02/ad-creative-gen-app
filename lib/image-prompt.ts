@@ -1,3 +1,4 @@
+import { layoutCopyNote, logoZoneNote } from '@/lib/ad-zones';
 import type { Layout } from '@/lib/platforms';
 
 export interface ImagePromptInput {
@@ -40,19 +41,6 @@ const TONE_NOTES: Record<string, string> = {
   Urgent: 'punchy, time-sensitive feel, strong focal point',
 };
 
-const LAYOUT_NOTES: Record<Layout, string> = {
-  left: 'keep the left 45% of the frame visually quiet so a headline can sit there',
-  center: 'keep the centre of the frame open for a headline; subject framed around the edges',
-  bottom: 'keep the bottom third of the frame simple and darker so a text band can sit there',
-};
-
-/** Where the brand mark may sit so it never meets the headline, subline, CTA, or the brand label in the top-left. */
-const LOGO_ZONES: Record<Layout, string> = {
-  left: 'the top-right or bottom-right corner, never in the left 45% and never along the top-left edge',
-  center: 'the bottom-right corner, never in the middle of the frame and never along the top-left edge',
-  bottom: 'the top-right corner, never in the bottom third and never along the top-left edge',
-};
-
 const VARIANT_NOTES = [
   'close framing, eye-level camera',
   'wider environmental framing, slight low angle',
@@ -71,21 +59,22 @@ export function buildImagePrompt(input: ImagePromptInput): string {
   if (input.audience) lines.push(`Audience: ${input.audience}. Show working professionals, not a consumer lifestyle.`);
   lines.push(`Visual style: ${STYLE_NOTES[input.visualStyle] ?? input.visualStyle}.`);
   lines.push(`Mood: ${TONE_NOTES[input.tone] ?? input.tone}.`);
-  lines.push(`Brand colours ${input.c1}, ${input.c2}, and ${input.c3} are the professional palette. Keep them. If they read as blue, use a corporate navy or blue. If they read as red, use a strong brand red. Put that colour on the product interface, logo area, clothing accents, and graphic shapes so the ad looks like a finished B2B campaign. Do not flatten the whole room into one tint.`);
-  lines.push(`Composition: ${LAYOUT_NOTES[input.layout]}. ${VARIANT_NOTES[input.variant % VARIANT_NOTES.length]}.`);
+  lines.push(`Brand colours ${input.c1}, ${input.c2}, and ${input.c3} are the professional palette. Keep them. If they read as blue, use a corporate navy or blue. If they read as red, use a strong brand red. Put that colour on the product interface, clothing accents, and graphic shapes so the ad looks like a finished B2B campaign. Do not flatten the whole room into one tint.`);
+  lines.push(`Composition: ${layoutCopyNote(input.layout)}. ${VARIANT_NOTES[input.variant % VARIANT_NOTES.length]}.`);
   if (input.variant >= 2) {
     lines.push('This is another version in the same campaign as Version A and B. Keep the same format, aspect ratio, production quality, lighting family, scene world, and brand colour treatment. Change only the camera angle and framing so it still looks like the same ad set.');
   }
   if (input.hasReferences) lines.push('Match the look, palette and art direction of the attached reference creatives the user chose for this ad.');
   if (input.hasLogo) {
-    lines.push(`The attached logo is the brand mark the user chose for this ad; place it once, small and legible, never distorted, only in ${LOGO_ZONES[input.layout]}. It must not touch or sit under the reserved text area.`);
+    // Logo is composited by the app; the model must leave that corner empty so text and mark never collide.
+    lines.push(`Leave ${logoZoneNote(input.layout)} empty and quiet — the brand logo is composited later and must not appear in this photograph.`);
   }
   if (input.fontNames && input.fontNames.length > 0) {
     lines.push(`Brand type feel should echo these font names (do not render letters): ${input.fontNames.join(', ')}.`);
   }
   lines.push('Keep the reserved text area free of logos, signage, screens with lettering, faces, and busy detail so overlaid text stays readable.');
   lines.push('Photorealistic, high detail, commercial quality, correct anatomy and product proportions.');
-  lines.push('Do not render any words, letters, captions, watermarks or UI; text is added separately.');
+  lines.push('Do not render any words, letters, captions, watermarks, logos or UI; text and the brand mark are added separately.');
   if (input.avoid) lines.push(`Avoid: ${input.avoid}.`);
   return lines.join('\n').slice(0, 4000);
 }

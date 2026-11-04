@@ -59,18 +59,20 @@ async function referenceUrls(
   renderAssetIds: string[],
 ): Promise<{ urls: string[]; hasLogo: boolean; hasReferences: boolean; fontNames: string[] }> {
   const selected = await resolveRenderAssets(assets, renderAssetIds);
-  const logos = selected.filter((a) => a.kind === 'logos' && REF_MIMES.has(a.mimeType)).slice(0, 1);
+  // Logos are composited on the canvas with known bounds. Only reference creatives go to Fal,
+  // so the model never paints a mark that later collides with headline / CTA.
+  const logos = selected.filter((a) => a.kind === 'logos' && (REF_MIMES.has(a.mimeType) || a.mimeType === 'image/svg+xml'));
   const refs = selected.filter((a) => a.kind === 'refs' && REF_MIMES.has(a.mimeType)).slice(0, 3);
   const fontNames = selected
     .filter((a) => a.kind === 'fonts')
     .map((a) => a.name.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' '))
     .slice(0, 4);
-  const uploaded = await Promise.all([...logos, ...refs].map((a) => uploadAssetToFal(a.id)));
+  const uploaded = await Promise.all(refs.map((a) => uploadAssetToFal(a.id)));
   const urls = uploaded.filter((u): u is string => typeof u === 'string');
   return {
     urls,
-    hasLogo: logos.length > 0 && urls.length > 0,
-    hasReferences: refs.length > 0 && urls.some((_, i) => i >= logos.length),
+    hasLogo: logos.length > 0,
+    hasReferences: urls.length > 0,
     fontNames,
   };
 }
@@ -103,8 +105,8 @@ export async function generateVersionImage(opts: {
     const prompt = [
       'Edit the attached advertising image.',
       `Change only this: ${change}`,
-      'Keep the same people, product, logo, colours, and framing.',
-      'Do not add any words, letters, captions, or watermarks.',
+      'Keep the same people, product, colours, and framing.',
+      'Do not add any words, letters, captions, logos, or watermarks.',
     ].join('\n');
     note(`${label}: editing this image only with ${modelLabel(model)} at ${resolution}. ${change}`);
     const job = buildImageJob({ prompt, size: version.size, model, resolution, referenceImageUrls: [version.imageUrl] });

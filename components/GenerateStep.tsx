@@ -30,11 +30,24 @@ function isHttpsUrl(value: string | null): value is string {
   return typeof value === 'string' && /^https:\/\//i.test(value);
 }
 
+const LOGO_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
+
+/** The single logo the user ticked On ad — used for canvas compositing with known bounds. */
+function pickLogoAsset(project: ProjectDTO): { id: string; url: string } | null {
+  const picked = new Set(project.renderAssetIds);
+  const logos = project.assets.filter((item) => item.kind === 'logos' && LOGO_MIMES.has(item.mimeType));
+  const chosen = (picked.size ? logos.filter((item) => picked.has(item.id)) : logos)[0] ?? logos[0];
+  if (!chosen) return null;
+  return { id: chosen.id, url: `/api/assets/${encodeURIComponent(chosen.id)}` };
+}
+
 export default function GenerateStep({ project, generating, busy, thoughts, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
+  const logoCache = useRef<HTMLImageElement | null>(null);
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
+  const [logoReady, setLogoReady] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [moreText, setMoreText] = useState('1');
   const [zipNote, setZipNote] = useState<string | null>(null);
@@ -46,6 +59,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
   const thoughtText = [thoughts, localThoughts].filter(Boolean).join('\n\n');
+  const logoPick = pickLogoAsset(project);
 
   useEffect(() => {
     if (!project.versions.some((item) => item.id === activeId)) {
@@ -61,6 +75,29 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     setLoadedUrls({});
     imageCache.current = {};
   }, [generating]);
+
+  // Brand logo for canvas overlay — same-origin asset URL, so downloads stay untainted.
+  useEffect(() => {
+    if (!logoPick) {
+      logoCache.current = null;
+      setLogoReady(false);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      logoCache.current = img;
+      setLogoReady(true);
+    };
+    img.onerror = () => {
+      logoCache.current = null;
+      setLogoReady(false);
+    };
+    img.src = logoPick.url;
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [logoPick?.id, logoPick?.url]);
 
   // Fal images are fetched once per URL with CORS so the canvas can export them.
   useEffect(() => {
@@ -340,6 +377,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                         version={version}
                         brand={project.brandName}
                         image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
+                        logo={logoReady ? logoCache.current : null}
                         active={version.id === active.id}
                         onCanvas={(node) => { canvasRefs.current[version.id] = node; }}
                         onMove={(kind, x, y, width, height) => {
@@ -525,6 +563,7 @@ function AdStage({
   version,
   brand,
   image,
+  logo,
   active,
   onCanvas,
   onMove,
@@ -532,6 +571,7 @@ function AdStage({
   version: VersionDTO;
   brand: string;
   image: HTMLImageElement | null | undefined;
+  logo: HTMLImageElement | null;
   active: boolean;
   onCanvas: (node: HTMLCanvasElement | null) => void;
   onMove: (kind: TextKind, x: number, y: number, width: number, height: number) => void;
@@ -551,7 +591,7 @@ function AdStage({
       ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, cw || 1, ch || 1) }
       : version;
     // drawAd measures the real text, so the handles match what is painted.
-    setBoxes(drawAd(canvas, painted, brand, image));
+    setBoxes(drawAd(canvas, painted, brand, image, { logo }));
     const stage = stageRef.current;
     if (!stage) return;
     const sync = () => {
@@ -562,7 +602,7 @@ function AdStage({
     const ro = new ResizeObserver(sync);
     ro.observe(stage);
     return () => ro.disconnect();
-  }, [version, brand, image, dragLive]);
+  }, [version, brand, image, logo, dragLive]);
 
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;

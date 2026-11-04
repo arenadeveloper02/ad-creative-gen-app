@@ -1,5 +1,12 @@
 import type { TextBox } from '@/lib/ad-layout';
+import { fitInside, logoSlot, type ZoneRect } from '@/lib/ad-zones';
+import type { Layout } from '@/lib/platforms';
 import type { VersionDTO } from '@/lib/types';
+
+export interface DrawAdOptions {
+  /** Brand mark composited on the canvas so its bounds are known and text can clear it. */
+  logo?: HTMLImageElement | null;
+}
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
@@ -43,58 +50,100 @@ function widest(ctx: CanvasRenderingContext2D, lines: string[]): number {
   return max;
 }
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-function overlaps(a: Rect, b: Rect, gap: number): boolean {
+function overlaps(a: ZoneRect, b: ZoneRect, gap: number): boolean {
   return a.x < b.x + b.w + gap && a.x + a.w + gap > b.x && a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
 }
 
+function clampBox(box: ZoneRect, width: number, height: number): void {
+  box.w = Math.min(box.w, width);
+  box.h = Math.min(box.h, height);
+  box.x = Math.min(width - box.w, Math.max(0, box.x));
+  box.y = Math.min(height - box.h, Math.max(0, box.y));
+}
+
 /**
- * Nudges text blocks so none of them overlap each other or the brand label.
- * Blocks are settled in stack order (headline, sub, CTA). A block that collides is moved to the free,
- * in-bounds spot closest to where it was: directly below or above an obstacle first, then beside it.
+ * Settles movable text boxes so none overlap each other or any fixed obstacle
+ * (brand label, logo). Prefers the nearest free spot; if the canvas is crowded,
+ * packs the stack into the clearest vertical band that still clears obstacles.
  */
-function resolveCollisions(boxes: TextBox[], fixed: Rect[], width: number, height: number, gap: number): void {
-  const settled: Rect[] = [...fixed];
-  const free = (r: Rect) => r.x >= 0 && r.y >= 0 && r.x + r.w <= width && r.y + r.h <= height && !settled.some((o) => overlaps(r, o, gap));
+function resolveCollisions(boxes: TextBox[], fixed: ZoneRect[], width: number, height: number, gap: number): void {
+  const settled: ZoneRect[] = [...fixed];
+  const free = (r: ZoneRect) =>
+    r.x >= 0 && r.y >= 0 && r.x + r.w <= width + 0.5 && r.y + r.h <= height + 0.5
+    && !settled.some((o) => overlaps(r, o, gap));
+
   for (const box of boxes) {
-    if (!free(box)) {
-      const candidates: Rect[] = [];
-      for (const o of settled) {
-        candidates.push({ ...box, y: o.y + o.h + gap }); // below
-        candidates.push({ ...box, y: o.y - gap - box.h }); // above
-        candidates.push({ ...box, x: o.x + o.w + gap }); // right
-        candidates.push({ ...box, x: o.x - gap - box.w }); // left
-        candidates.push({ ...box, x: o.x + o.w + gap, y: o.y }); // right, top-aligned
+    clampBox(box, width, height);
+    if (free(box)) {
+      settled.push(box);
+      continue;
+    }
+
+    const candidates: ZoneRect[] = [];
+    for (const o of settled) {
+      candidates.push({ ...box, y: o.y + o.h + gap });
+      candidates.push({ ...box, y: o.y - gap - box.h });
+      candidates.push({ ...box, x: o.x + o.w + gap, y: o.y });
+      candidates.push({ ...box, x: o.x - gap - box.w, y: o.y });
+      candidates.push({ ...box, x: o.x + o.w + gap });
+      candidates.push({ ...box, x: o.x - gap - box.w });
+    }
+    for (const a of settled) {
+      for (const b of settled) {
+        if (a === b) continue;
+        candidates.push({ ...box, y: a.y + a.h + gap, x: b.x + b.w + gap });
+        candidates.push({ ...box, y: a.y + a.h + gap, x: Math.max(0, b.x - gap - box.w) });
       }
-      // Two-step moves: below one obstacle and clear of the next.
-      for (const a of settled) for (const b of settled) if (a !== b) candidates.push({ ...box, y: a.y + a.h + gap, x: b.x + b.w + gap });
-      const ok = candidates.filter(free);
-      const dist = (r: Rect) => Math.hypot(r.x - box.x, r.y - box.y) + (r.x !== box.x ? width * 0.15 : 0); // prefer vertical moves
-      ok.sort((a, b) => dist(a) - dist(b));
-      const best = ok[0];
-      if (best) {
-        box.x = best.x;
-        box.y = best.y;
-      } else {
-        // Nothing fully free: at least stay in bounds and off the brand label.
-        box.x = Math.min(width - box.w, Math.max(0, box.x));
-        box.y = Math.min(height - box.h, Math.max(0, box.y));
-        const label = fixed[0];
-        if (label && overlaps(box, label, gap)) box.y = Math.min(height - box.h, label.y + label.h + gap);
+    }
+    // Light scan across the frame for a free slot when corner nudges are not enough.
+    const stepY = Math.max(8, Math.round(height * 0.04));
+    const stepX = Math.max(8, Math.round(width * 0.05));
+    for (let y = 0; y <= height - box.h; y += stepY) {
+      for (let x of [0, Math.max(0, (width - box.w) / 2), Math.max(0, width - box.w)]) {
+        candidates.push({ ...box, x, y });
+      }
+      for (let x = 0; x <= width - box.w; x += stepX) {
+        candidates.push({ ...box, x, y });
+      }
+    }
+
+    const ok = candidates.map((c) => {
+      const next = { ...c };
+      clampBox(next, width, height);
+      return next;
+    }).filter(free);
+
+    const dist = (r: ZoneRect) => Math.hypot(r.x - box.x, r.y - box.y) + (Math.abs(r.x - box.x) > 1 ? width * 0.12 : 0);
+    ok.sort((a, b) => dist(a) - dist(b));
+    const best = ok[0];
+    if (best) {
+      box.x = best.x;
+      box.y = best.y;
+    } else {
+      // Last resort: sit just below the lowest fixed obstacle that collides, still in bounds.
+      clampBox(box, width, height);
+      const blockers = [...fixed, ...settled.filter((s) => s !== box)].filter((o) => overlaps(box, o, gap));
+      if (blockers.length) {
+        const bottom = Math.max(...blockers.map((o) => o.y + o.h));
+        box.y = Math.min(height - box.h, bottom + gap);
+        clampBox(box, width, height);
+        if (!free(box)) {
+          box.x = Math.min(width - box.w, Math.max(0, box.x === 0 ? 0 : width - box.w));
+          clampBox(box, width, height);
+        }
       }
     }
     settled.push(box);
   }
 }
 
+function logoReady(logo: HTMLImageElement | null | undefined): logo is HTMLImageElement {
+  return !!logo && logo.complete && logo.naturalWidth > 0 && logo.naturalHeight > 0;
+}
+
 /**
  * Draws one ad version. Text is painted, never inserted as HTML. The generated Fal image, when loaded, is the backdrop.
+ * The brand logo (when provided) is composited in a fixed layout slot so copy can never sit on it.
  *
  * Background templates, each driven by the three colour chips:
  *   photo    – the picture with a neutral shade. c1 = CTA button, c2 = accent bar, c3 = text.
@@ -104,7 +153,13 @@ function resolveCollisions(boxes: TextBox[], fixed: Rect[], width: number, heigh
  *
  * Returns the boxes of the painted headline, subline, and CTA in canvas pixels so the editor can place drag handles exactly.
  */
-export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: string, image?: HTMLImageElement | null): TextBox[] {
+export function drawAd(
+  canvas: HTMLCanvasElement,
+  version: VersionDTO,
+  brand: string,
+  image?: HTMLImageElement | null,
+  options?: DrawAdOptions,
+): TextBox[] {
   const [width, height] = version.size.split('x').map((n) => Number(n));
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return [];
   canvas.width = width;
@@ -115,33 +170,34 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   const maxW = width - pad * 2;
   const hasImage = !!image && image.complete && image.naturalWidth > 0;
   const bg = version.bg;
+  const layout = version.layout as Layout;
   const { c1, c2, c3 } = version;
+  const logo = logoReady(options?.logo) ? options.logo : null;
 
   // Backdrop.
   if (hasImage) {
     coverImage(ctx, image, width, height);
     if (bg === 'gradient') {
-      const tint = version.layout === 'bottom'
+      const tint = layout === 'bottom'
         ? ctx.createLinearGradient(0, height * 0.3, 0, height)
-        : version.layout === 'center'
+        : layout === 'center'
           ? ctx.createRadialGradient(width / 2, height / 2, width * 0.05, width / 2, height / 2, width * 0.75)
           : ctx.createLinearGradient(0, 0, width, 0);
-      tint.addColorStop(0, rgba(c1, version.layout === 'bottom' ? 0 : 0.86));
-      tint.addColorStop(1, rgba(c2, version.layout === 'bottom' ? 0.88 : 0.18));
+      tint.addColorStop(0, rgba(c1, layout === 'bottom' ? 0 : 0.86));
+      tint.addColorStop(1, rgba(c2, layout === 'bottom' ? 0.88 : 0.18));
       ctx.fillStyle = tint;
       ctx.fillRect(0, 0, width, height);
     } else if (bg === 'photo') {
-      const scrim = version.layout === 'bottom'
+      const scrim = layout === 'bottom'
         ? ctx.createLinearGradient(0, height * 0.45, 0, height)
-        : version.layout === 'center'
+        : layout === 'center'
           ? ctx.createRadialGradient(width / 2, height / 2, width * 0.1, width / 2, height / 2, width * 0.7)
           : ctx.createLinearGradient(0, 0, width, 0);
-      scrim.addColorStop(0, `rgba(12,16,28,${version.layout === 'bottom' ? 0 : 0.42})`);
-      scrim.addColorStop(1, `rgba(12,16,28,${version.layout === 'bottom' ? 0.55 : version.layout === 'center' ? 0.12 : 0.05})`);
+      scrim.addColorStop(0, `rgba(12,16,28,${layout === 'bottom' ? 0 : 0.42})`);
+      scrim.addColorStop(1, `rgba(12,16,28,${layout === 'bottom' ? 0.55 : layout === 'center' ? 0.12 : 0.05})`);
       ctx.fillStyle = scrim;
       ctx.fillRect(0, 0, width, height);
     } else {
-      // Solid and light draw a panel behind the text later; keep the photo clean here.
       ctx.fillStyle = 'rgba(12,16,28,0.08)';
       ctx.fillRect(0, 0, width, height);
     }
@@ -169,6 +225,21 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
     ctx.globalAlpha = 1;
   }
 
+  // Brand mark — known bounds, drawn before copy so collision can clear it.
+  const slot = logoSlot(layout, width, height);
+  let logoBox: ZoneRect | null = null;
+  if (logo) {
+    logoBox = fitInside(slot, logo.naturalWidth, logo.naturalHeight);
+    if (logoBox.w > 0 && logoBox.h > 0) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.drawImage(logo, logoBox.x, logoBox.y, logoBox.w, logoBox.h);
+      ctx.restore();
+    } else {
+      logoBox = null;
+    }
+  }
+
   // Colour roles per template.
   const ink = bg === 'light' ? c1 : c3;
   const ctaFill = bg === 'light' ? c1 : bg === 'photo' ? c1 : c3;
@@ -180,7 +251,7 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   const showSub = version.showSub !== false && version.sub.trim() !== '';
   const showCta = version.showCta !== false && version.cta.trim() !== '';
 
-  const hSize = Math.round(width * (version.layout === 'bottom' ? 0.085 : 0.098));
+  const hSize = Math.round(width * (layout === 'bottom' ? 0.085 : 0.098));
   const sSize = Math.round(width * 0.042);
   const cSize = Math.round(width * 0.036);
   const hLead = hSize * 1.12;
@@ -190,19 +261,24 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   const barH = Math.max(4, Math.round(width * 0.008));
   const barGap = Math.round(width * 0.03);
 
+  // When a logo occupies the right side, keep the default text column from undercutting it.
+  const textMaxW = logoBox && layout === 'left'
+    ? Math.min(maxW, Math.max(width * 0.4, logoBox.x - pad - Math.round(width * 0.03)))
+    : maxW;
+
   ctx.font = `bold ${hSize}px Arial`;
-  const hLines = showHeadline ? wrap(ctx, version.headline.trim(), maxW).slice(0, 4) : [];
-  const hW = Math.min(maxW, widest(ctx, hLines));
+  const hLines = showHeadline ? wrap(ctx, version.headline.trim(), textMaxW).slice(0, 4) : [];
+  const hW = Math.min(textMaxW, widest(ctx, hLines));
   const hH = hLines.length * hLead;
 
   ctx.font = `${sSize}px Arial`;
-  const sLines = showSub ? wrap(ctx, version.sub.trim(), maxW).slice(0, 3) : [];
-  const sW = Math.min(maxW, widest(ctx, sLines));
+  const sLines = showSub ? wrap(ctx, version.sub.trim(), textMaxW).slice(0, 3) : [];
+  const sW = Math.min(textMaxW, widest(ctx, sLines));
   const sH = sLines.length * sLead;
 
   ctx.font = `600 ${cSize}px Arial`;
   const ctaText = version.cta.trim();
-  const ctaW = showCta ? Math.min(maxW, ctx.measureText(ctaText).width + width * 0.09) : 0;
+  const ctaW = showCta ? Math.min(textMaxW, ctx.measureText(ctaText).width + width * 0.09) : 0;
   const ctaH = showCta ? width * 0.095 : 0;
 
   const blockH = (showHeadline ? hH : 0)
@@ -210,11 +286,19 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
     + (showCta ? ((showHeadline || showSub) ? gapCta : 0) + ctaH : 0);
 
   let flowY: number;
-  if (version.layout === 'center') flowY = (height - blockH) / 2;
-  else if (version.layout === 'bottom') flowY = height - pad - blockH - Math.round(width * 0.06);
+  if (layout === 'center') flowY = (height - blockH) / 2;
+  else if (layout === 'bottom') flowY = height - pad - blockH - Math.round(width * 0.06);
   else flowY = Math.max(pad * 2, height * 0.42 - hSize);
 
-  const centered = version.layout === 'center';
+  // Keep the default center stack above a bottom-right logo.
+  if (logoBox && layout === 'center') {
+    const logoTop = logoBox.y - Math.round(height * 0.02);
+    if (flowY + blockH > logoTop) {
+      flowY = Math.max(pad * 2, logoTop - blockH);
+    }
+  }
+
+  const centered = layout === 'center';
   let cursorY = flowY;
 
   // Each block uses its saved spot when the user has dragged it; otherwise it follows the stack.
@@ -237,17 +321,19 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
   if (subSpot) boxes.push({ kind: 'sub', x: subSpot.x, y: subSpot.y, w: sW, h: sH });
   if (ctaSpot) boxes.push({ kind: 'cta', x: ctaSpot.x, y: ctaSpot.y, w: ctaW, h: ctaH });
 
-  // Brand label in the top-left is a fixed obstacle; nothing may be painted over it.
+  // Brand label in the top-left is a fixed obstacle; logo slot is too when present.
   const labelSize = Math.round(width * 0.032);
   ctx.font = `600 ${labelSize}px Arial`;
   const labelText = (brand || 'Your brand').toUpperCase().slice(0, 40);
-  const labelBox: Rect = { x: pad, y: pad - labelSize * 0.2, w: ctx.measureText(labelText).width, h: labelSize * 1.4 };
-  // The accent bar sits above the first block, so reserve that strip too by growing the first box upward for the check.
+  const labelBox: ZoneRect = { x: pad, y: pad - labelSize * 0.2, w: ctx.measureText(labelText).width, h: labelSize * 1.4 };
+  const fixed: ZoneRect[] = [labelBox];
+  if (logoBox) fixed.push(logoBox);
+
   const collideGap = Math.round(width * 0.02);
   if (boxes.length > 0) {
     const first = boxes[0];
     const grown: TextBox = { ...first, y: first.y - barGap - barH, h: first.h + barGap + barH };
-    resolveCollisions([grown, ...boxes.slice(1)], [labelBox], width, height, collideGap);
+    resolveCollisions([grown, ...boxes.slice(1)], fixed, width, height, collideGap);
     first.x = grown.x;
     first.y = grown.y + barGap + barH;
   }
@@ -279,7 +365,7 @@ export function drawAd(canvas: HTMLCanvasElement, version: VersionDTO, brand: st
     ctx.beginPath();
     ctx.roundRect(px, py, pw, ph, Math.round(width * 0.02));
     ctx.fill();
-  } else if (hasImage && version.layout === 'bottom' && bg === 'photo') {
+  } else if (hasImage && layout === 'bottom' && bg === 'photo') {
     ctx.globalAlpha = 0.22;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, flowY - hSize * 0.6, width, blockH + hSize * 1.2);
