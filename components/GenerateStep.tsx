@@ -413,7 +413,12 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                         }}
                         onOpenEdit={(kind) => {
                           setActiveId(version.id);
-                          setTextEdit({ versionId: version.id, kind });
+                          // Same text again closes the popup (handy if it was opened by mistake).
+                          setTextEdit((current) =>
+                            current?.versionId === version.id && current.kind === kind
+                              ? null
+                              : { versionId: version.id, kind },
+                          );
                         }}
                         onSaveEdit={() => setTextEdit(null)}
                       />
@@ -514,7 +519,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
             <div>
               {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
               <h4>Modify version {letter(active.position)}</h4>
-              <p className="hint">Click headline, subline or CTA on the preview to edit text and style. Drag to move.</p>
+              <p className="hint">Click headline, subline or CTA on the preview to edit. Click the same text again to close the popup, or press Save.</p>
               <label htmlFor="mHeadline">Headline</label>
               <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value, showHeadline: true })} />
               <div className="text-toggle-row">
@@ -907,7 +912,7 @@ function AdStage({
               </button>
             </div>
           </div>
-          <p className="hint text-edit-pop-hint">Drag the grey bar to move this panel. Drag the text on the ad to reposition it.</p>
+          <p className="hint text-edit-pop-hint">Drag the grey bar to move this panel. Click the same text again to close without Save.</p>
           <button type="button" className="btn sm text-edit-pop-save" onClick={onSaveEdit}>
             Save
           </button>
