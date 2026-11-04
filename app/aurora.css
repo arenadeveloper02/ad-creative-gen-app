@@ -20,6 +20,13 @@
   --aurora-glow2: 45, 212, 191;
   --aurora-r: 20px;
   --aurora-r-lg: 28px;
+  /* One control language for every text field and dropdown in the app. */
+  --control-radius: 16px;
+  --control-pad-y: 16px;
+  --control-pad-x: 18px;
+  --control-font: 15px;
+  --control-line: 1.45;
+  --control-height: 56px;
   --aurora-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --aurora-bg: #f6f6fc;
   --aurora-bg2: #eeeefa;
@@ -311,22 +318,61 @@ label { display: block; font-size: 13px; color: var(--aurora-text); margin: 16px
 label .req { color: var(--aurora-c1); margin-left: 2px; }
 .hint { font-size: 12px; line-height: 1.5; color: var(--aurora-text3); margin: -2px 0 8px; }
 
-textarea, input[type="text"], input[type="number"], input[type="search"], select {
-  width: 100%; background-color: var(--aurora-glass2); border: 1px solid var(--aurora-line);
-  border-radius: 16px; color: var(--aurora-text); padding: 20px 24px; font-size: 15px; line-height: 1.5;
-  font-family: inherit; outline: none;
+/* Shared field chrome — brand name, product, goal, saved profile, platform selects, etc. */
+textarea,
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+input[type="email"],
+select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--control-height);
+  background-color: var(--aurora-glass2);
+  border: 1px solid var(--aurora-line);
+  border-radius: var(--control-radius);
+  color: var(--aurora-text);
+  padding: var(--control-pad-y) var(--control-pad-x);
+  font-size: var(--control-font);
+  line-height: var(--control-line);
+  font-family: inherit;
+  outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
-textarea::placeholder, input::placeholder { color: var(--aurora-text3); }
-textarea:focus, input:focus, select:focus { border-color: var(--aurora-c1); box-shadow: 0 0 0 3px rgba(var(--aurora-glow), 0.25); background-color: var(--aurora-glass3); }
-select { appearance: none; -webkit-appearance: none; padding-right: 44px;
+textarea::placeholder,
+input::placeholder { color: var(--aurora-text3); }
+textarea:focus,
+input:focus,
+select:focus {
+  border-color: var(--aurora-c1);
+  box-shadow: 0 0 0 3px rgba(var(--aurora-glow), 0.25);
+  background-color: var(--aurora-glass3);
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--control-height);
+  padding-right: 44px;
+  background-color: var(--aurora-glass2);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%233a3658' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 16px center; background-size: 16px 16px; }
-html.dark select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237f7ba6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px 16px;
+}
+html.dark select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237f7ba6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
 select option { color: #15132b; background: #fff; }
-textarea { min-height: 140px; resize: vertical; line-height: 1.6; padding: 22px 24px; }
+textarea {
+  min-height: 140px;
+  height: auto;
+  resize: vertical;
+  line-height: 1.55;
+  padding: var(--control-pad-y) var(--control-pad-x);
+}
 textarea.script { min-height: 200px; }
-textarea.short { min-height: 72px; }
+textarea.short { min-height: 88px; }
 input[type="range"] { width: 100%; accent-color: var(--aurora-c1); }
 
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -360,10 +406,16 @@ input[type="range"] { width: 100%; accent-color: var(--aurora-c1); }
 .divider { height: 1px; background: var(--aurora-line); margin: 24px 0 4px; }
 
 .drop {
-  border: 1.5px dashed var(--aurora-line2); border-radius: 18px; padding: 28px; text-align: center;
-  color: var(--aurora-text2); font-size: 13px; background: var(--aurora-glass2); transition: 0.2s;
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  min-height: var(--control-height); border: 1px solid var(--aurora-line); border-radius: var(--control-radius);
+  padding: var(--control-pad-y) var(--control-pad-x); text-align: center;
+  color: var(--aurora-text3); font-size: var(--control-font); line-height: var(--control-line);
+  background: var(--aurora-glass2); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
-.drop:hover, .drop:focus { border-color: var(--aurora-c1); background: rgba(var(--aurora-glow), 0.06); outline: none; }
+.drop:hover, .drop:focus {
+  border-color: var(--aurora-c1); background: var(--aurora-glass3);
+  box-shadow: 0 0 0 3px rgba(var(--aurora-glow), 0.18); outline: none; color: var(--aurora-text2);
+}
 .drop svg { width: 26px; height: 26px; fill: var(--aurora-text3); margin-bottom: 8px; }
 
 /* Voiceover + music mix controls */
@@ -451,7 +503,10 @@ input[type="range"] { width: 100%; accent-color: var(--aurora-c1); }
 .fbody { padding: 16px; display: flex; flex-direction: column; flex: 1; }
 .fbody .ftitle { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 4px; color: var(--aurora-text); }
 .fbody .fdesc { font-size: 12px; color: var(--aurora-text3); margin-bottom: 10px; line-height: 1.45; }
-.fbody input { font-size: 12px; padding: 9px 12px; border-radius: 12px; }
+.fbody input {
+  font-size: var(--control-font); padding: var(--control-pad-y) var(--control-pad-x);
+  border-radius: var(--control-radius); min-height: var(--control-height);
+}
 .facts { display: flex; gap: 8px; margin-top: auto; padding-top: 10px; }
 .facts button {
   flex: 1; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 999px;
