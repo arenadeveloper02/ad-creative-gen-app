@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { positionPatch, readTextStyle, stylePatch, type TextBox, type TextKind, type TextStyle } from '@/lib/ad-layout';
+import {
+  positionPatch,
+  readTextStyle,
+  readTextValue,
+  stylePatch,
+  textKindLabel,
+  textValuePatch,
+  type TextBox,
+  type TextKind,
+  type TextStyle,
+} from '@/lib/ad-layout';
 import { drawAd } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { SIZES } from '@/lib/platforms';
@@ -55,6 +65,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [localThoughts, setLocalThoughts] = useState('');
   const [appendBusy, setAppendBusy] = useState(false);
   const [pendingExtra, setPendingExtra] = useState(0);
+  /** Which on-ad text block is open in the left popup editor. */
+  const [textEdit, setTextEdit] = useState<{ versionId: string; kind: TextKind } | null>(null);
   const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
@@ -66,6 +78,11 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
       setActiveId(project.versions[0]?.id ?? '');
     }
   }, [project.versions, activeId]);
+
+  useEffect(() => {
+    if (!textEdit) return;
+    if (!project.versions.some((item) => item.id === textEdit.versionId)) setTextEdit(null);
+  }, [project.versions, textEdit]);
 
   // Keep the step list and thinking open until every preview image has settled on the canvas.
   useEffect(() => {
@@ -379,6 +396,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                         image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
                         logo={logoReady ? logoCache.current : null}
                         active={version.id === active.id}
+                        editingKind={textEdit?.versionId === version.id ? textEdit.kind : null}
                         onCanvas={(node) => { canvasRefs.current[version.id] = node; }}
                         onMove={(kind, x, y, width, height) => {
                           if (version.id !== active.id) setActiveId(version.id);
@@ -388,9 +406,15 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           if (version.id !== active.id) setActiveId(version.id);
                           onPatch({ ...version, ...stylePatch(kind, style) });
                         }}
-                        onSelect={() => {
+                        onText={(kind, value) => {
                           if (version.id !== active.id) setActiveId(version.id);
+                          onPatch({ ...version, ...textValuePatch(kind, value) });
                         }}
+                        onOpenEdit={(kind) => {
+                          setActiveId(version.id);
+                          setTextEdit({ versionId: version.id, kind });
+                        }}
+                        onSaveEdit={() => setTextEdit(null)}
                       />
                     )}
                     <div className="vcopy">{version.primary}</div>
@@ -489,7 +513,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
             <div>
               {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
               <h4>Modify version {letter(active.position)}</h4>
-              <p className="hint">Rename here. Drag on the preview to move. Subline is optional.</p>
+              <p className="hint">Click headline, subline or CTA on the preview to edit text and style. Drag to move.</p>
               <label htmlFor="mHeadline">Headline</label>
               <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value, showHeadline: true })} />
               <div className="text-toggle-row">
@@ -572,28 +596,34 @@ function AdStage({
   image,
   logo,
   active,
+  editingKind,
   onCanvas,
   onMove,
   onStyle,
-  onSelect,
+  onText,
+  onOpenEdit,
+  onSaveEdit,
 }: {
   version: VersionDTO;
   brand: string;
   image: HTMLImageElement | null | undefined;
   logo: HTMLImageElement | null;
   active: boolean;
+  editingKind: TextKind | null;
   onCanvas: (node: HTMLCanvasElement | null) => void;
   onMove: (kind: TextKind, x: number, y: number, width: number, height: number) => void;
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
-  onSelect: () => void;
+  onText: (kind: TextKind, value: string) => void;
+  onOpenEdit: (kind: TextKind) => void;
+  onSaveEdit: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number; moved: boolean } | null>(null);
   const [frame, setFrame] = useState({ sw: 1, sh: 1, cw: 1, ch: 1 });
   const [dragLive, setDragLive] = useState<{ kind: TextKind; x: number; y: number } | null>(null);
   const [boxes, setBoxes] = useState<TextBox[]>([]);
-  const [selected, setSelected] = useState<TextKind | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -602,41 +632,35 @@ function AdStage({
     const painted = dragLive
       ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, cw || 1, ch || 1) }
       : version;
-    // drawAd measures the real text, so the handles match what is painted.
     setBoxes(drawAd(canvas, painted, brand, image, { logo }));
-    const stage = stageRef.current;
-    if (!stage) return;
+    const host = frameRef.current;
+    if (!host) return;
     const sync = () => {
-      const rect = stage.getBoundingClientRect();
+      const rect = host.getBoundingClientRect();
       setFrame({ sw: rect.width, sh: rect.height, cw: canvas.width || 1, ch: canvas.height || 1 });
     };
     sync();
     const ro = new ResizeObserver(sync);
-    ro.observe(stage);
+    ro.observe(host);
     return () => ro.disconnect();
   }, [version, brand, image, logo, dragLive]);
 
-  useEffect(() => {
-    if (!selected) return;
-    if (!boxes.some((box) => box.kind === selected)) setSelected(null);
-  }, [boxes, selected]);
-
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
-  const selectedBox = selected ? boxes.find((box) => box.kind === selected) ?? null : null;
-  const selectedStyle = selected ? readTextStyle(version, selected) : null;
-  const sizeLabel = selectedStyle ? Math.round(selectedStyle.scale * 100) : 100;
+  const editBox = editingKind ? boxes.find((box) => box.kind === editingKind) ?? null : null;
+  const editStyle = editingKind ? readTextStyle(version, editingKind) : null;
+  const sizeLabel = editStyle ? Math.round(editStyle.scale * 100) : 100;
+  const popW = 220;
 
   function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
-    onSelect();
-    setSelected(kind);
+    onOpenEdit(kind);
     const box = boxes.find((item) => item.kind === kind);
     if (!box) return;
-    const stage = stageRef.current;
-    if (!stage) return;
-    const rect = stage.getBoundingClientRect();
+    const host = frameRef.current;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
     dragRef.current = {
       kind,
       ox: event.clientX - rect.left - box.x * scaleX,
@@ -651,9 +675,9 @@ function AdStage({
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
-    const stage = stageRef.current;
-    if (!drag || !stage) return;
-    const rect = stage.getBoundingClientRect();
+    const host = frameRef.current;
+    if (!drag || !host) return;
+    const rect = host.getBoundingClientRect();
     const box = boxes.find((item) => item.kind === drag.kind);
     const maxX = Math.max(0, frame.cw - (box?.w ?? 0));
     const maxY = Math.max(0, frame.ch - (box?.h ?? 0));
@@ -679,89 +703,108 @@ function AdStage({
     }
   }
 
+  let popLeft = 8;
+  let popTop = 8;
+  if (editBox) {
+    const boxLeft = editBox.x * scaleX;
+    const boxTop = editBox.y * scaleY;
+    popLeft = boxLeft - popW - 14;
+    if (popLeft < 8) popLeft = Math.min(frame.sw - popW - 8, boxLeft + editBox.w * scaleX + 14);
+    popTop = Math.max(8, Math.min(boxTop, Math.max(8, frame.sh - 220)));
+  }
+
   return (
-    <div
-      ref={stageRef}
-      className={`ad-stage${active ? ' on' : ''}`}
-      onPointerDown={() => setSelected(null)}
-    >
-      <canvas
-        ref={(node) => {
-          canvasRef.current = node;
-          onCanvas(node);
-        }}
-      />
-      {boxes.map((box) => (
-        <div
-          key={box.kind}
-          className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}${selected === box.kind ? ' selected' : ''}`}
-          style={{
-            left: box.x * scaleX - 6,
-            top: box.y * scaleY - 6,
-            width: box.w * scaleX + 12,
-            height: box.h * scaleY + 12,
+    <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}${editingKind ? ' editing' : ''}`}>
+      <div ref={frameRef} className="ad-stage-frame">
+        <canvas
+          ref={(node) => {
+            canvasRef.current = node;
+            onCanvas(node);
           }}
-          onPointerDown={(event) => onPointerDown(box.kind, event)}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onClick={(event) => event.stopPropagation()}
-          role="button"
-          tabIndex={0}
-          aria-label={`Edit ${box.kind}`}
-        >
-          <span>{box.kind === 'headline' ? 'Headline' : box.kind === 'sub' ? 'Subline' : 'CTA'}</span>
-        </div>
-      ))}
-      {selected && selectedBox && selectedStyle && (
+        />
+        {boxes.map((box) => (
+          <div
+            key={box.kind}
+            className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}${editingKind === box.kind ? ' selected' : ''}`}
+            style={{
+              left: box.x * scaleX - 6,
+              top: box.y * scaleY - 6,
+              width: box.w * scaleX + 12,
+              height: box.h * scaleY + 12,
+            }}
+            onPointerDown={(event) => onPointerDown(box.kind, event)}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onClick={(event) => event.stopPropagation()}
+            role="button"
+            tabIndex={0}
+            aria-label={`Edit ${box.kind}`}
+          >
+            <span>{textKindLabel(box.kind)}</span>
+          </div>
+        ))}
+      </div>
+      {editingKind && editBox && editStyle && (
         <div
-          className="text-style-bar"
-          style={{
-            left: Math.max(8, selectedBox.x * scaleX - 118),
-            top: Math.max(8, selectedBox.y * scaleY),
-          }}
+          className="text-edit-pop"
+          style={{ left: popLeft, top: popTop, width: popW }}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
-          role="toolbar"
-          aria-label={`${selected} text style`}
+          role="dialog"
+          aria-label={`Edit ${textKindLabel(editingKind)}`}
         >
-          <button
-            type="button"
-            className={`text-style-btn${selectedStyle.bold ? ' on' : ''}`}
-            aria-pressed={selectedStyle.bold}
-            title="Bold"
-            onClick={() => onStyle(selected, { bold: !selectedStyle.bold })}
-          >
-            <strong>B</strong>
-          </button>
-          <button
-            type="button"
-            className={`text-style-btn italic${selectedStyle.italic ? ' on' : ''}`}
-            aria-pressed={selectedStyle.italic}
-            title="Italic"
-            onClick={() => onStyle(selected, { italic: !selectedStyle.italic })}
-          >
-            I
-          </button>
-          <span className="text-style-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="text-style-btn"
-            title="Smaller"
-            disabled={selectedStyle.scale <= 0.7}
-            onClick={() => onStyle(selected, { scale: selectedStyle.scale - 0.05 })}
-          >
-            −
-          </button>
-          <span className="text-style-size" aria-live="polite">{sizeLabel}</span>
-          <button
-            type="button"
-            className="text-style-btn"
-            title="Larger"
-            disabled={selectedStyle.scale >= 1.6}
-            onClick={() => onStyle(selected, { scale: selectedStyle.scale + 0.05 })}
-          >
-            +
+          <p className="text-edit-pop-title">{textKindLabel(editingKind)}</p>
+          <textarea
+            className="text-edit-pop-input"
+            rows={editingKind === 'cta' ? 2 : 3}
+            value={readTextValue(version, editingKind)}
+            onChange={(e) => onText(editingKind, e.target.value)}
+            placeholder={editingKind === 'sub' ? 'Optional subline' : undefined}
+          />
+          <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
+            <button
+              type="button"
+              className={`text-style-btn${editStyle.bold ? ' on' : ''}`}
+              aria-pressed={editStyle.bold}
+              title="Bold"
+              onClick={() => onStyle(editingKind, { bold: !editStyle.bold })}
+            >
+              <strong>B</strong>
+            </button>
+            <button
+              type="button"
+              className={`text-style-btn italic${editStyle.italic ? ' on' : ''}`}
+              aria-pressed={editStyle.italic}
+              title="Italic"
+              onClick={() => onStyle(editingKind, { italic: !editStyle.italic })}
+            >
+              I
+            </button>
+            <span className="text-style-sep" aria-hidden="true" />
+            <button
+              type="button"
+              className="text-style-btn"
+              title="Smaller"
+              disabled={editStyle.scale <= 0.7}
+              onClick={() => onStyle(editingKind, { scale: editStyle.scale - 0.05 })}
+            >
+              −
+            </button>
+            <span className="text-style-size" aria-live="polite">{sizeLabel}</span>
+            <button
+              type="button"
+              className="text-style-btn"
+              title="Larger"
+              disabled={editStyle.scale >= 1.6}
+              onClick={() => onStyle(editingKind, { scale: editStyle.scale + 0.05 })}
+            >
+              +
+            </button>
+          </div>
+          <p className="hint text-edit-pop-hint">Drag the text on the ad to move it. Size updates live.</p>
+          <button type="button" className="btn sm text-edit-pop-save" onClick={onSaveEdit}>
+            Save
           </button>
         </div>
       )}

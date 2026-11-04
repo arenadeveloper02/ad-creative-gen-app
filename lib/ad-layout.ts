@@ -78,3 +78,25 @@ export function stylePatch(kind: TextKind, style: Partial<TextStyle>): Partial<V
     ...(typeof style.scale === 'number' ? { ctaScale: clampTextScale(style.scale) } : {}),
   };
 }
+
+export function readTextValue(version: VersionDTO, kind: TextKind): string {
+  if (kind === 'headline') return version.headline;
+  if (kind === 'sub') return version.sub;
+  return version.cta;
+}
+
+export function textValuePatch(kind: TextKind, value: string): Partial<VersionDTO> {
+  if (kind === 'headline') return { headline: value, showHeadline: true };
+  if (kind === 'sub') {
+    const patch: Partial<VersionDTO> = { sub: value };
+    if (value.trim() !== '') patch.showSub = true;
+    return patch;
+  }
+  return { cta: value };
+}
+
+export function textKindLabel(kind: TextKind): string {
+  if (kind === 'headline') return 'Headline';
+  if (kind === 'sub') return 'Subline';
+  return 'CTA';
+}
