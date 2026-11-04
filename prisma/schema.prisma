@@ -122,6 +122,9 @@ model AdVersion {
   // Normalized 0–1 position for the Brief-selected brand logo. Null = layout default slot.
   logoX        Float?
   logoY        Float?
+  // Which brand logo to overlay on this version. Null = Brief "On ad" pick. showLogo false hides it.
+  logoAssetId  String?
+  showLogo     Boolean  @default(true)
   showHeadline Boolean  @default(true)
   showSub      Boolean  @default(true)
   showCta      Boolean  @default(true)

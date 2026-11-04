@@ -45,6 +45,8 @@ function versionDTO(row: AdVersion): VersionDTO {
     ctaY: row.ctaY,
     logoX: row.logoX ?? null,
     logoY: row.logoY ?? null,
+    logoAssetId: row.logoAssetId ?? null,
+    showLogo: row.showLogo !== false,
     showHeadline: row.showHeadline,
     showSub: row.showSub,
     showCta: row.showCta,

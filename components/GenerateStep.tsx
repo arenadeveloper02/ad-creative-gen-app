@@ -97,22 +97,39 @@ function isHttpsUrl(value: string | null): value is string {
 
 const LOGO_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
 
-/** The single logo the user ticked On ad — used for canvas compositing with known bounds. */
-function pickLogoAsset(project: ProjectDTO): { id: string; url: string } | null {
+function brandLogos(project: ProjectDTO) {
+  return project.assets.filter((item) => item.kind === 'logos' && LOGO_MIMES.has(item.mimeType));
+}
+
+/** Brief "On ad" pick, or the first brand logo if nothing was ticked. */
+function defaultLogoId(project: ProjectDTO): string | null {
+  const logos = brandLogos(project);
+  if (logos.length === 0) return null;
   const picked = new Set(project.renderAssetIds);
-  const logos = project.assets.filter((item) => item.kind === 'logos' && LOGO_MIMES.has(item.mimeType));
   const chosen = (picked.size ? logos.filter((item) => picked.has(item.id)) : logos)[0] ?? logos[0];
-  if (!chosen) return null;
-  return { id: chosen.id, url: `/api/assets/${encodeURIComponent(chosen.id)}` };
+  return chosen?.id ?? null;
+}
+
+/** Logo drawn on a version: cancelled → none; else version pick or Brief default. */
+function resolveLogoId(project: ProjectDTO, version: VersionDTO): string | null {
+  if (version.showLogo === false) return null;
+  const logos = brandLogos(project);
+  if (logos.length === 0) return null;
+  if (version.logoAssetId && logos.some((item) => item.id === version.logoAssetId)) return version.logoAssetId;
+  return defaultLogoId(project);
+}
+
+function assetUrl(id: string): string {
+  return `/api/assets/${encodeURIComponent(id)}`;
 }
 
 export default function GenerateStep({ project, generating, busy, thoughts, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage }: GenerateStepProps) {
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
-  const logoCache = useRef<HTMLImageElement | null>(null);
+  const logoCache = useRef<Record<string, HTMLImageElement>>({});
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
-  const [logoReady, setLogoReady] = useState(false);
+  const [logoReadyIds, setLogoReadyIds] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [moreText, setMoreText] = useState('1');
   const [zipNote, setZipNote] = useState<string | null>(null);
@@ -124,11 +141,13 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [textEdit, setTextEdit] = useState<{ versionId: string; kind: TextKind } | null>(null);
   const [guide, setGuide] = useState<GuideKind | null>(null);
   const [guideText, setGuideText] = useState('');
+  const [logoDrawerOpen, setLogoDrawerOpen] = useState(false);
   const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
   const thoughtText = [thoughts, localThoughts].filter(Boolean).join('\n\n');
-  const logoPick = pickLogoAsset(project);
+  const logos = brandLogos(project);
+  const activeLogoId = active ? resolveLogoId(project, active) : null;
 
   useEffect(() => {
     if (!project.versions.some((item) => item.id === activeId)) {
@@ -150,28 +169,35 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     imageCache.current = {};
   }, [generating]);
 
-  // Brand logo for canvas overlay — same-origin asset URL, so downloads stay untainted.
+  // Brand logos for canvas overlay — same-origin asset URLs, so downloads stay untainted.
+  const logoIdsKey = logos.map((item) => item.id).join(',');
   useEffect(() => {
-    if (!logoPick) {
-      logoCache.current = null;
-      setLogoReady(false);
-      return;
+    let cancelled = false;
+    for (const logo of logos) {
+      if (logoCache.current[logo.id]) continue;
+      const img = new Image();
+      img.onload = () => {
+        if (cancelled) return;
+        logoCache.current[logo.id] = img;
+        setLogoReadyIds((current) => ({ ...current, [logo.id]: true }));
+      };
+      img.onerror = () => {
+        if (cancelled) return;
+        delete logoCache.current[logo.id];
+        setLogoReadyIds((current) => ({ ...current, [logo.id]: false }));
+      };
+      img.src = assetUrl(logo.id);
     }
-    const img = new Image();
-    img.onload = () => {
-      logoCache.current = img;
-      setLogoReady(true);
-    };
-    img.onerror = () => {
-      logoCache.current = null;
-      setLogoReady(false);
-    };
-    img.src = logoPick.url;
     return () => {
-      img.onload = null;
-      img.onerror = null;
+      cancelled = true;
     };
-  }, [logoPick?.id, logoPick?.url]);
+  }, [logoIdsKey]);
+
+  function logoImageFor(version: VersionDTO): HTMLImageElement | null {
+    const id = resolveLogoId(project, version);
+    if (!id || logoReadyIds[id] !== true) return null;
+    return logoCache.current[id] ?? null;
+  }
 
   // Fal images are fetched once per URL with CORS so the canvas can export them.
   useEffect(() => {
@@ -484,7 +510,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           version={version}
                           brand={project.brandName}
                           image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
-                          logo={logoReady ? logoCache.current : null}
+                          logo={logoImageFor(version)}
                           active={version.id === active.id}
                           editingKind={null}
                           onCanvas={(node) => {
@@ -556,7 +582,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     version={active}
                     brand={project.brandName}
                     image={isHttpsUrl(active.imageUrl) && loadedUrls[active.imageUrl] ? imageCache.current[active.imageUrl] : null}
-                    logo={logoReady ? logoCache.current : null}
+                    logo={logoImageFor(active)}
                     active
                     editingKind={textEdit?.versionId === active.id ? textEdit.kind : null}
                     onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
@@ -588,6 +614,54 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     ? 'Still drawing this version…'
                     : `${imageState(active)}. Drag logo or text to move · click text to edit.`}
                 </p>
+                <div className="logo-tools">
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={logos.length === 0}
+                    aria-expanded={logoDrawerOpen}
+                    onClick={() => setLogoDrawerOpen((open) => !open)}
+                  >
+                    {logoDrawerOpen ? 'Close logos' : 'Change logo'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={!activeLogoId}
+                    onClick={() => {
+                      onPatch({ ...active, showLogo: false });
+                      setLogoDrawerOpen(false);
+                    }}
+                  >
+                    Cancel logo
+                  </button>
+                </div>
+                {logoDrawerOpen && (
+                  <div className="logo-drawer" role="listbox" aria-label="Brand logos">
+                    <p className="hint">Logos from this brand — pick one for this version.</p>
+                    <div className="logo-drawer-strip">
+                      {logos.map((logo) => {
+                        const selected = activeLogoId === logo.id;
+                        return (
+                          <button
+                            key={logo.id}
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            className={`logo-drawer-item${selected ? ' on' : ''}`}
+                            title={logo.name || 'Logo'}
+                            onClick={() => {
+                              onPatch({ ...active, logoAssetId: logo.id, showLogo: true });
+                              setLogoDrawerOpen(false);
+                            }}
+                          >
+                            <img src={assetUrl(logo.id)} alt={logo.name || 'Logo'} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="gen-image-edit">
                   <label htmlFor={`edit-${active.id}`}>Update this image</label>
                   <textarea

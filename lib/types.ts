@@ -51,6 +51,8 @@ export interface VersionDTO {
   ctaY: number | null;
   logoX: number | null;
   logoY: number | null;
+  logoAssetId: string | null;
+  showLogo: boolean;
   showHeadline: boolean;
   showSub: boolean;
   showCta: boolean;

@@ -178,6 +178,8 @@ export interface VersionPatch {
   ctaY?: number | null;
   logoX?: number | null;
   logoY?: number | null;
+  logoAssetId?: string | null;
+  showLogo?: boolean;
   showHeadline?: boolean;
   showSub?: boolean;
   showCta?: boolean;
@@ -256,6 +258,9 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (cy !== undefined) patch.ctaY = cy;
   if (lx !== undefined) patch.logoX = lx;
   if (ly !== undefined) patch.logoY = ly;
+  if (body.logoAssetId === null) patch.logoAssetId = null;
+  else if (typeof body.logoAssetId === 'string' && isId(body.logoAssetId)) patch.logoAssetId = body.logoAssetId;
+  if (typeof body.showLogo === 'boolean') patch.showLogo = body.showLogo;
   if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
   if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;
   if (typeof body.showCta === 'boolean') patch.showCta = body.showCta;

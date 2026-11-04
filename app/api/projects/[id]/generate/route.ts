@@ -160,6 +160,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           ctaY: null,
           logoX: null,
           logoY: null,
+          logoAssetId: null,
+          showLogo: true,
           showHeadline: true,
           showSub: true,
           showCta: true,
