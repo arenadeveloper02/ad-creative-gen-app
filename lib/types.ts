@@ -107,7 +107,10 @@ export interface ProjectListItem {
   platform: string;
   status: string;
   step: number;
+  createdAt: string;
   updatedAt: string;
+  /** First generated version image, when the ad has one. */
+  previewImageUrl: string | null;
 }
 
 export interface UsageRow {

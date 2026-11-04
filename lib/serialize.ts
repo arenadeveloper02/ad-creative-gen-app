@@ -99,14 +99,21 @@ export function serializeProfile(row: BrandProfile & { assets: AssetRow[] }): Pr
   };
 }
 
-export function serializeListItem(row: Pick<AdProject, 'id' | 'name' | 'platform' | 'status' | 'step' | 'updatedAt'>): ProjectListItem {
+export function serializeListItem(
+  row: Pick<AdProject, 'id' | 'name' | 'platform' | 'status' | 'step' | 'createdAt' | 'updatedAt'> & {
+    versions?: { imageUrl: string | null }[];
+  },
+): ProjectListItem {
+  const preview = row.versions?.find((version) => typeof version.imageUrl === 'string' && /^https:\/\//i.test(version.imageUrl));
   return {
     id: row.id,
     name: row.name,
     platform: row.platform,
     status: row.status,
     step: row.step,
+    createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    previewImageUrl: preview?.imageUrl ?? null,
   };
 }
 

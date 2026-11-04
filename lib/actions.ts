@@ -28,7 +28,20 @@ export async function listProjects(ownerEmail: string): Promise<ProjectListItem[
   const rows = await prisma.adProject.findMany({
     where: { ownerEmail },
     orderBy: { updatedAt: 'desc' },
-    select: { id: true, name: true, platform: true, status: true, step: true, updatedAt: true },
+    select: {
+      id: true,
+      name: true,
+      platform: true,
+      status: true,
+      step: true,
+      createdAt: true,
+      updatedAt: true,
+      versions: {
+        orderBy: { position: 'asc' },
+        take: 4,
+        select: { imageUrl: true },
+      },
+    },
   });
   return rows.map(serializeListItem);
 }
