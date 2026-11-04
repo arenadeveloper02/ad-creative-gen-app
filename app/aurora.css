@@ -246,16 +246,10 @@ html:not(.dark) .aurora-g, html:not(.dark) .card, html:not(.dark) .log, html:not
 }
 
 /* ---- Page shell ------------------------------------------------------- */
-.wrap { max-width: 1680px; margin: 0 auto; padding: 22px 20px 48px; }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 22px 24px 48px; }
 /* Opened agent inside the Arena iframe: the top bar runs edge to edge. */
-.wrap.wrap-fill { max-width: none; width: 100%; min-height: 100vh; box-sizing: border-box; padding-left: 20px; padding-right: 20px; }
-@media (min-width: 720px) {
-  .wrap { padding: 28px 28px 56px; }
-  .wrap.wrap-fill { padding-left: 28px; padding-right: 28px; }
-}
-@media (min-width: 1200px) {
-  .wrap.wrap-fill { padding-left: 32px; padding-right: 32px; }
-}
+.wrap.wrap-fill { max-width: none; width: 100%; min-height: 100vh; box-sizing: border-box; }
+@media (min-width: 720px) { .wrap { padding: 28px 32px 56px; } }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
 .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; color: var(--aurora-text); }
 .brand .brand-sub { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--aurora-text3); margin-top: 1px; }

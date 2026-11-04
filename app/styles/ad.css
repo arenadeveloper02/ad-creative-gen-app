@@ -193,15 +193,12 @@
 .status-line { font-size: 12px; min-height: 18px; margin-top: 8px; color: var(--aurora-text3); }
 .status-line.ok { color: var(--aurora-done); }
 .status-line.err { color: var(--aurora-bad-text); }
-/* Brief / Platform / Generate share one wide canvas so ads aren’t squeezed. */
+/* Brief / Platform / Generate — centered, between the old narrow and max-wide layouts. */
 .wide-single {
   width: 100%;
-  max-width: min(1760px, calc(100vw - 48px));
+  max-width: min(1400px, calc(100vw - 64px));
   margin: 0 auto;
   box-sizing: border-box;
-}
-@media (min-width: 1200px) {
-  .wide-single { max-width: min(1760px, calc(100vw - 64px)); }
 }
 @media (max-width: 820px) {
   .preview-grid, .gen-layout, .row { grid-template-columns: 1fr; display: grid; }
