@@ -141,7 +141,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [textEdit, setTextEdit] = useState<{ versionId: string; kind: TextKind } | null>(null);
   const [guide, setGuide] = useState<GuideKind | null>(null);
   const [guideText, setGuideText] = useState('');
-  const [logoDrawerOpen, setLogoDrawerOpen] = useState(false);
   const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
@@ -511,6 +510,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           brand={project.brandName}
                           image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
                           logo={logoImageFor(version)}
+                          logos={[]}
+                          activeLogoId={null}
                           active={version.id === active.id}
                           editingKind={null}
                           onCanvas={(node) => {
@@ -522,6 +523,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           onText={() => {}}
                           onOpenEdit={() => setActiveId(version.id)}
                           onSaveEdit={() => {}}
+                          onPickLogo={() => {}}
+                          onCancelLogo={() => {}}
                         />
                       )}
                     </button>
@@ -583,6 +586,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     brand={project.brandName}
                     image={isHttpsUrl(active.imageUrl) && loadedUrls[active.imageUrl] ? imageCache.current[active.imageUrl] : null}
                     logo={logoImageFor(active)}
+                    logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
+                    activeLogoId={activeLogoId}
                     active
                     editingKind={textEdit?.versionId === active.id ? textEdit.kind : null}
                     onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
@@ -596,10 +601,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       onPatch({ ...active, ...textValuePatch(kind, value) });
                     }}
                     onOpenEdit={(kind) => {
-                      if (kind === 'logo') {
-                        setTextEdit(null);
-                        return;
-                      }
                       setTextEdit((current) =>
                         current?.versionId === active.id && current.kind === kind
                           ? null
@@ -607,61 +608,21 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       );
                     }}
                     onSaveEdit={() => setTextEdit(null)}
+                    onPickLogo={(id) => {
+                      onPatch({ ...active, logoAssetId: id, showLogo: true });
+                      setTextEdit(null);
+                    }}
+                    onCancelLogo={() => {
+                      onPatch({ ...active, showLogo: false });
+                      setTextEdit(null);
+                    }}
                   />
                 )}
                 <p className="hint gen-focus-status">
                   {extraPending(active)
                     ? 'Still drawing this version…'
-                    : `${imageState(active)}. Drag logo or text to move · click text to edit.`}
+                    : `${imageState(active)}. Click the logo for options · drag to move · click text to edit.`}
                 </p>
-                <div className="logo-tools">
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    disabled={logos.length === 0}
-                    aria-expanded={logoDrawerOpen}
-                    onClick={() => setLogoDrawerOpen((open) => !open)}
-                  >
-                    {logoDrawerOpen ? 'Close logos' : 'Change logo'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    disabled={!activeLogoId}
-                    onClick={() => {
-                      onPatch({ ...active, showLogo: false });
-                      setLogoDrawerOpen(false);
-                    }}
-                  >
-                    Cancel logo
-                  </button>
-                </div>
-                {logoDrawerOpen && (
-                  <div className="logo-drawer" role="listbox" aria-label="Brand logos">
-                    <p className="hint">Logos from this brand — pick one for this version.</p>
-                    <div className="logo-drawer-strip">
-                      {logos.map((logo) => {
-                        const selected = activeLogoId === logo.id;
-                        return (
-                          <button
-                            key={logo.id}
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            className={`logo-drawer-item${selected ? ' on' : ''}`}
-                            title={logo.name || 'Logo'}
-                            onClick={() => {
-                              onPatch({ ...active, logoAssetId: logo.id, showLogo: true });
-                              setLogoDrawerOpen(false);
-                            }}
-                          >
-                            <img src={assetUrl(logo.id)} alt={logo.name || 'Logo'} />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
                 <div className="gen-image-edit">
                   <label htmlFor={`edit-${active.id}`}>Update this image</label>
                   <textarea
@@ -817,6 +778,8 @@ function AdStage({
   brand,
   image,
   logo,
+  logos,
+  activeLogoId,
   active,
   editingKind,
   compact = false,
@@ -826,11 +789,15 @@ function AdStage({
   onText,
   onOpenEdit,
   onSaveEdit,
+  onPickLogo,
+  onCancelLogo,
 }: {
   version: VersionDTO;
   brand: string;
   image: HTMLImageElement | null | undefined;
   logo: HTMLImageElement | null;
+  logos: { id: string; name: string; url: string }[];
+  activeLogoId: string | null;
   active: boolean;
   editingKind: TextKind | null;
   compact?: boolean;
@@ -840,6 +807,8 @@ function AdStage({
   onText: (kind: TextKind, value: string) => void;
   onOpenEdit: (kind: TextKind) => void;
   onSaveEdit: () => void;
+  onPickLogo: (id: string) => void;
+  onCancelLogo: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -878,13 +847,22 @@ function AdStage({
 
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
-  const editBox = editingKind ? boxes.find((box) => box.kind === editingKind) ?? null : null;
-  const editStyle = editingKind ? readTextStyle(version, editingKind) : null;
+  const editBox = editingKind && editingKind !== 'logo' ? boxes.find((box) => box.kind === editingKind) ?? null : null;
+  const logoBox = boxes.find((box) => box.kind === 'logo') ?? null;
+  const editStyle = editingKind && editingKind !== 'logo' ? readTextStyle(version, editingKind) : null;
   const sizeLabel = editStyle ? Math.round(editStyle.scale * 100) : 100;
   const trackLabel = editStyle ? Math.round(editStyle.track * 100) : 0;
   const leadLabel = editStyle ? Math.round(editStyle.lead * 100) : 100;
   const popW = 260;
   const popH = 360;
+  const logoPopW = 280;
+  const logoPopH = 168;
+  const logoDrawerOpen = !compact && editingKind === 'logo';
+  const logoPopOrigin = logoBox
+    ? clearPopupOrigin(logoBox, scaleX, scaleY, frame.sw, frame.sh, logoPopW, logoPopH)
+    : { x: Math.max(8, frame.sw - logoPopW - 8), y: 8 };
+  const logoPopLeft = popPos && logoDrawerOpen ? popPos.x : logoPopOrigin.x;
+  const logoPopTop = popPos && logoDrawerOpen ? popPos.y : logoPopOrigin.y;
 
   function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -942,9 +920,11 @@ function AdStage({
     event.stopPropagation();
     const stage = stageRef.current;
     if (!stage) return;
-    const origin = popPos ?? (editBox
-      ? clearPopupOrigin(editBox, scaleX, scaleY, frame.sw, frame.sh, popW, popH)
-      : { x: 8, y: 8 });
+    const origin = popPos ?? (logoDrawerOpen
+      ? logoPopOrigin
+      : editBox
+        ? clearPopupOrigin(editBox, scaleX, scaleY, frame.sw, frame.sh, popW, popH)
+        : { x: 8, y: 8 });
     const rect = stage.getBoundingClientRect();
     popDragRef.current = {
       ox: event.clientX - rect.left - origin.x,
@@ -1015,7 +995,68 @@ function AdStage({
           </div>
         ))}
       </div>
-      {!compact && editingKind && editBox && editStyle && (
+      {!compact && !logo && logos.length > 0 && (
+        <button
+          type="button"
+          className="logo-stage-open"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenEdit('logo');
+          }}
+        >
+          Logo
+        </button>
+      )}
+      {logoDrawerOpen && (
+        <div
+          className="logo-edit-pop"
+          style={{ left: logoPopLeft, top: logoPopTop, width: logoPopW }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-label="Brand logos"
+        >
+          <div
+            className="text-edit-pop-drag"
+            onPointerDown={onPopPointerDown}
+            onPointerMove={onPopPointerMove}
+            onPointerUp={onPopPointerUp}
+            onPointerCancel={onPopPointerUp}
+            title="Drag to move"
+          >
+            <p className="text-edit-pop-title">Brand logos</p>
+            <span className="text-edit-pop-grip" aria-hidden="true">⋮⋮</span>
+          </div>
+          <p className="hint logo-edit-hint">Pick one for this ad, or cancel the logo.</p>
+          <div className="logo-drawer-strip" role="listbox" aria-label="Brand logos">
+            {logos.map((item) => {
+              const selected = activeLogoId === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`logo-drawer-item${selected ? ' on' : ''}`}
+                  title={item.name || 'Logo'}
+                  onClick={() => onPickLogo(item.id)}
+                >
+                  <img src={item.url} alt={item.name || 'Logo'} />
+                </button>
+              );
+            })}
+          </div>
+          <div className="logo-edit-actions">
+            <button type="button" className="btn ghost sm" disabled={!activeLogoId} onClick={onCancelLogo}>
+              Cancel logo
+            </button>
+            <button type="button" className="btn sm" onClick={onSaveEdit}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {!compact && editingKind && editingKind !== 'logo' && editBox && editStyle && (
         <div
           className="text-edit-pop"
           style={{ left: popLeft, top: popTop, width: popW }}
