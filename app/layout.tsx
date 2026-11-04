@@ -3,6 +3,8 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import { ArenaEmailProvider } from '@/components/arena-email-provider';
 import { getArenaEmailId } from '@/lib/arena-email';
 import './globals.css';
+import './aurora.css';
+import './styles/ad.css';
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
