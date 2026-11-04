@@ -46,6 +46,15 @@ function versionDTO(row: AdVersion): VersionDTO {
     showHeadline: row.showHeadline,
     showSub: row.showSub,
     showCta: row.showCta,
+    headlineBold: row.headlineBold ?? true,
+    headlineItalic: row.headlineItalic ?? false,
+    headlineScale: row.headlineScale ?? 1,
+    subBold: row.subBold ?? false,
+    subItalic: row.subItalic ?? false,
+    subScale: row.subScale ?? 1,
+    ctaBold: row.ctaBold ?? true,
+    ctaItalic: row.ctaItalic ?? false,
+    ctaScale: row.ctaScale ?? 1,
   };
 }
 

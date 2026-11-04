@@ -56,6 +56,26 @@
 .vcard canvas { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--aurora-inset); }
 .ad-stage { position: relative; width: 100%; border-radius: 12px; overflow: hidden; touch-action: none; }
 .ad-stage canvas { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--aurora-inset); }
+.ad-handle.selected { border-color: var(--aurora-c1); box-shadow: 0 0 0 1px color-mix(in srgb, var(--aurora-c1) 35%, transparent); }
+.text-style-bar {
+  position: absolute; z-index: 4; display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px; border-radius: 12px; background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--aurora-line); box-shadow: var(--aurora-shadow-sm); backdrop-filter: blur(8px);
+}
+.text-style-btn {
+  width: 30px; height: 30px; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--aurora-text); font: 700 13px/1 inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.text-style-btn.italic { font-style: italic; font-weight: 600; }
+.text-style-btn:hover { background: var(--aurora-glass2); }
+.text-style-btn.on { background: color-mix(in srgb, var(--aurora-c1) 14%, transparent); border-color: var(--aurora-c1); color: var(--aurora-c1); }
+.text-style-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.text-style-sep { width: 1px; height: 18px; background: var(--aurora-line); margin: 0 2px; }
+.text-style-size {
+  min-width: 34px; text-align: center; font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--aurora-text2);
+}
 /* Handles are invisible until hover so the ad reads clean. The tag sits above the box, never over the text. */
 .ad-handle {
   position: absolute; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 6px;

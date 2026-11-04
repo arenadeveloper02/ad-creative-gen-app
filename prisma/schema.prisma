@@ -122,6 +122,16 @@ model AdVersion {
   showHeadline Boolean  @default(true)
   showSub      Boolean  @default(true)
   showCta      Boolean  @default(true)
+  // Per-block type style for on-image headline / subline / CTA (not brand font files).
+  headlineBold   Boolean @default(true)
+  headlineItalic Boolean @default(false)
+  headlineScale  Float   @default(1)
+  subBold        Boolean @default(false)
+  subItalic      Boolean @default(false)
+  subScale       Float   @default(1)
+  ctaBold        Boolean @default(true)
+  ctaItalic      Boolean @default(false)
+  ctaScale       Float   @default(1)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

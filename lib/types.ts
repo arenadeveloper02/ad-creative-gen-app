@@ -52,6 +52,15 @@ export interface VersionDTO {
   showHeadline: boolean;
   showSub: boolean;
   showCta: boolean;
+  headlineBold: boolean;
+  headlineItalic: boolean;
+  headlineScale: number;
+  subBold: boolean;
+  subItalic: boolean;
+  subScale: number;
+  ctaBold: boolean;
+  ctaItalic: boolean;
+  ctaScale: number;
 }
 
 export interface ProjectDTO {

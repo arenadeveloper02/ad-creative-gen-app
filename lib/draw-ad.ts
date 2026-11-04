@@ -1,7 +1,13 @@
-import type { TextBox } from '@/lib/ad-layout';
+import { readTextStyle, type TextBox } from '@/lib/ad-layout';
 import { fitInside, logoSlot, type ZoneRect } from '@/lib/ad-zones';
 import type { Layout } from '@/lib/platforms';
 import type { VersionDTO } from '@/lib/types';
+
+function typeFace(bold: boolean, italic: boolean, sizePx: number): string {
+  const style = italic ? 'italic' : 'normal';
+  const weight = bold ? '700' : '400';
+  return `${style} ${weight} ${Math.max(8, Math.round(sizePx))}px Arial`;
+}
 
 export interface DrawAdOptions {
   /** Brand mark composited on the canvas so its bounds are known and text can clear it. */
@@ -250,10 +256,13 @@ export function drawAd(
   const showHeadline = version.showHeadline !== false && version.headline.trim() !== '';
   const showSub = version.showSub !== false && version.sub.trim() !== '';
   const showCta = version.showCta !== false && version.cta.trim() !== '';
+  const headStyle = readTextStyle(version, 'headline');
+  const subStyle = readTextStyle(version, 'sub');
+  const ctaStyle = readTextStyle(version, 'cta');
 
-  const hSize = Math.round(width * (layout === 'bottom' ? 0.085 : 0.098));
-  const sSize = Math.round(width * 0.042);
-  const cSize = Math.round(width * 0.036);
+  const hSize = Math.round(width * (layout === 'bottom' ? 0.085 : 0.098) * headStyle.scale);
+  const sSize = Math.round(width * 0.042 * subStyle.scale);
+  const cSize = Math.round(width * 0.036 * ctaStyle.scale);
   const hLead = hSize * 1.12;
   const sLead = sSize * 1.3;
   const gapHS = hSize * 0.3;
@@ -266,20 +275,20 @@ export function drawAd(
     ? Math.min(maxW, Math.max(width * 0.4, logoBox.x - pad - Math.round(width * 0.03)))
     : maxW;
 
-  ctx.font = `bold ${hSize}px Arial`;
+  ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize);
   const hLines = showHeadline ? wrap(ctx, version.headline.trim(), textMaxW).slice(0, 4) : [];
   const hW = Math.min(textMaxW, widest(ctx, hLines));
   const hH = hLines.length * hLead;
 
-  ctx.font = `${sSize}px Arial`;
+  ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize);
   const sLines = showSub ? wrap(ctx, version.sub.trim(), textMaxW).slice(0, 3) : [];
   const sW = Math.min(textMaxW, widest(ctx, sLines));
   const sH = sLines.length * sLead;
 
-  ctx.font = `600 ${cSize}px Arial`;
+  ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize);
   const ctaText = version.cta.trim();
-  const ctaW = showCta ? Math.min(textMaxW, ctx.measureText(ctaText).width + width * 0.09) : 0;
-  const ctaH = showCta ? width * 0.095 : 0;
+  const ctaW = showCta ? Math.min(textMaxW, ctx.measureText(ctaText).width + width * 0.09 * ctaStyle.scale) : 0;
+  const ctaH = showCta ? width * 0.095 * ctaStyle.scale : 0;
 
   const blockH = (showHeadline ? hH : 0)
     + (showSub ? (showHeadline ? gapHS : 0) + sH : 0)
@@ -391,7 +400,7 @@ export function drawAd(
   }
 
   if (headSpot) {
-    ctx.font = `bold ${hSize}px Arial`;
+    ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize);
     ctx.fillStyle = ink;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
@@ -405,7 +414,7 @@ export function drawAd(
   }
 
   if (subSpot) {
-    ctx.font = `${sSize}px Arial`;
+    ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize);
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.92;
     ctx.textAlign = 'left';
@@ -420,7 +429,7 @@ export function drawAd(
   }
 
   if (ctaSpot) {
-    ctx.font = `600 ${cSize}px Arial`;
+    ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize);
     ctx.fillStyle = ctaFill;
     ctx.beginPath();
     ctx.roundRect(ctaSpot.x, ctaSpot.y, ctaW, ctaH, ctaH / 2);

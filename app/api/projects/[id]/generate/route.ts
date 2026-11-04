@@ -150,6 +150,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           showHeadline: true,
           showSub: true,
           showCta: true,
+          headlineBold: lead?.headlineBold ?? true,
+          headlineItalic: lead?.headlineItalic ?? false,
+          headlineScale: lead?.headlineScale ?? 1,
+          subBold: lead?.subBold ?? false,
+          subItalic: lead?.subItalic ?? false,
+          subScale: lead?.subScale ?? 1,
+          ctaBold: lead?.ctaBold ?? true,
+          ctaItalic: lead?.ctaItalic ?? false,
+          ctaScale: lead?.ctaScale ?? 1,
         },
       }));
     }

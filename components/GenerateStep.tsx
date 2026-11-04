@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { positionPatch, type TextBox, type TextKind } from '@/lib/ad-layout';
+import { positionPatch, readTextStyle, stylePatch, type TextBox, type TextKind, type TextStyle } from '@/lib/ad-layout';
 import { drawAd } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { SIZES } from '@/lib/platforms';
@@ -384,6 +384,13 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           if (version.id !== active.id) setActiveId(version.id);
                           onPatch({ ...version, ...positionPatch(kind, x, y, width, height) });
                         }}
+                        onStyle={(kind, style) => {
+                          if (version.id !== active.id) setActiveId(version.id);
+                          onPatch({ ...version, ...stylePatch(kind, style) });
+                        }}
+                        onSelect={() => {
+                          if (version.id !== active.id) setActiveId(version.id);
+                        }}
                       />
                     )}
                     <div className="vcopy">{version.primary}</div>
@@ -567,6 +574,8 @@ function AdStage({
   active,
   onCanvas,
   onMove,
+  onStyle,
+  onSelect,
 }: {
   version: VersionDTO;
   brand: string;
@@ -575,13 +584,16 @@ function AdStage({
   active: boolean;
   onCanvas: (node: HTMLCanvasElement | null) => void;
   onMove: (kind: TextKind, x: number, y: number, width: number, height: number) => void;
+  onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
+  onSelect: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number } | null>(null);
+  const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number; moved: boolean } | null>(null);
   const [frame, setFrame] = useState({ sw: 1, sh: 1, cw: 1, ch: 1 });
   const [dragLive, setDragLive] = useState<{ kind: TextKind; x: number; y: number } | null>(null);
   const [boxes, setBoxes] = useState<TextBox[]>([]);
+  const [selected, setSelected] = useState<TextKind | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -604,12 +616,22 @@ function AdStage({
     return () => ro.disconnect();
   }, [version, brand, image, logo, dragLive]);
 
+  useEffect(() => {
+    if (!selected) return;
+    if (!boxes.some((box) => box.kind === selected)) setSelected(null);
+  }, [boxes, selected]);
+
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
+  const selectedBox = selected ? boxes.find((box) => box.kind === selected) ?? null : null;
+  const selectedStyle = selected ? readTextStyle(version, selected) : null;
+  const sizeLabel = selectedStyle ? Math.round(selectedStyle.scale * 100) : 100;
 
   function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
+    onSelect();
+    setSelected(kind);
     const box = boxes.find((item) => item.kind === kind);
     if (!box) return;
     const stage = stageRef.current;
@@ -621,6 +643,7 @@ function AdStage({
       oy: event.clientY - rect.top - box.y * scaleY,
       x: box.x,
       y: box.y,
+      moved: false,
     };
     setDragLive({ kind, x: box.x, y: box.y });
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -636,6 +659,7 @@ function AdStage({
     const maxY = Math.max(0, frame.ch - (box?.h ?? 0));
     const x = Math.min(maxX, Math.max(0, (event.clientX - rect.left - drag.ox) / scaleX));
     const y = Math.min(maxY, Math.max(0, (event.clientY - rect.top - drag.oy) / scaleY));
+    if (Math.hypot(x - drag.x, y - drag.y) > 2) drag.moved = true;
     drag.x = x;
     drag.y = y;
     setDragLive({ kind: drag.kind, x, y });
@@ -644,7 +668,7 @@ function AdStage({
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (drag) {
-      onMove(drag.kind, drag.x, drag.y, frame.cw, frame.ch);
+      if (drag.moved) onMove(drag.kind, drag.x, drag.y, frame.cw, frame.ch);
       dragRef.current = null;
       setDragLive(null);
       try {
@@ -656,7 +680,11 @@ function AdStage({
   }
 
   return (
-    <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}`}>
+    <div
+      ref={stageRef}
+      className={`ad-stage${active ? ' on' : ''}`}
+      onPointerDown={() => setSelected(null)}
+    >
       <canvas
         ref={(node) => {
           canvasRef.current = node;
@@ -666,7 +694,7 @@ function AdStage({
       {boxes.map((box) => (
         <div
           key={box.kind}
-          className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}`}
+          className={`ad-handle${dragLive?.kind === box.kind ? ' dragging' : ''}${selected === box.kind ? ' selected' : ''}`}
           style={{
             left: box.x * scaleX - 6,
             top: box.y * scaleY - 6,
@@ -680,11 +708,63 @@ function AdStage({
           onClick={(event) => event.stopPropagation()}
           role="button"
           tabIndex={0}
-          aria-label={`Move ${box.kind}`}
+          aria-label={`Edit ${box.kind}`}
         >
           <span>{box.kind === 'headline' ? 'Headline' : box.kind === 'sub' ? 'Subline' : 'CTA'}</span>
         </div>
       ))}
+      {selected && selectedBox && selectedStyle && (
+        <div
+          className="text-style-bar"
+          style={{
+            left: Math.max(8, selectedBox.x * scaleX - 118),
+            top: Math.max(8, selectedBox.y * scaleY),
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          role="toolbar"
+          aria-label={`${selected} text style`}
+        >
+          <button
+            type="button"
+            className={`text-style-btn${selectedStyle.bold ? ' on' : ''}`}
+            aria-pressed={selectedStyle.bold}
+            title="Bold"
+            onClick={() => onStyle(selected, { bold: !selectedStyle.bold })}
+          >
+            <strong>B</strong>
+          </button>
+          <button
+            type="button"
+            className={`text-style-btn italic${selectedStyle.italic ? ' on' : ''}`}
+            aria-pressed={selectedStyle.italic}
+            title="Italic"
+            onClick={() => onStyle(selected, { italic: !selectedStyle.italic })}
+          >
+            I
+          </button>
+          <span className="text-style-sep" aria-hidden="true" />
+          <button
+            type="button"
+            className="text-style-btn"
+            title="Smaller"
+            disabled={selectedStyle.scale <= 0.7}
+            onClick={() => onStyle(selected, { scale: selectedStyle.scale - 0.05 })}
+          >
+            −
+          </button>
+          <span className="text-style-size" aria-live="polite">{sizeLabel}</span>
+          <button
+            type="button"
+            className="text-style-btn"
+            title="Larger"
+            disabled={selectedStyle.scale >= 1.6}
+            onClick={() => onStyle(selected, { scale: selectedStyle.scale + 0.05 })}
+          >
+            +
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -179,12 +179,27 @@ export interface VersionPatch {
   showHeadline?: boolean;
   showSub?: boolean;
   showCta?: boolean;
+  headlineBold?: boolean;
+  headlineItalic?: boolean;
+  headlineScale?: number;
+  subBold?: boolean;
+  subItalic?: boolean;
+  subScale?: number;
+  ctaBold?: boolean;
+  ctaItalic?: boolean;
+  ctaScale?: number;
 }
 
 function cleanCoord(value: unknown): number | null | undefined {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.min(1, Math.max(0, value));
+}
+
+/** Relative type size for on-ad text. 1 = layout default. */
+function cleanScale(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(1.6, Math.max(0.7, Math.round(value * 20) / 20));
 }
 
 export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
@@ -220,6 +235,18 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
   if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;
   if (typeof body.showCta === 'boolean') patch.showCta = body.showCta;
+  if (typeof body.headlineBold === 'boolean') patch.headlineBold = body.headlineBold;
+  if (typeof body.headlineItalic === 'boolean') patch.headlineItalic = body.headlineItalic;
+  if (typeof body.subBold === 'boolean') patch.subBold = body.subBold;
+  if (typeof body.subItalic === 'boolean') patch.subItalic = body.subItalic;
+  if (typeof body.ctaBold === 'boolean') patch.ctaBold = body.ctaBold;
+  if (typeof body.ctaItalic === 'boolean') patch.ctaItalic = body.ctaItalic;
+  const hs = cleanScale(body.headlineScale);
+  const ss = cleanScale(body.subScale);
+  const cs = cleanScale(body.ctaScale);
+  if (hs !== undefined) patch.headlineScale = hs;
+  if (ss !== undefined) patch.subScale = ss;
+  if (cs !== undefined) patch.ctaScale = cs;
   return patch;
 }
 
