@@ -182,12 +182,18 @@ export interface VersionPatch {
   headlineBold?: boolean;
   headlineItalic?: boolean;
   headlineScale?: number;
+  headlineTrack?: number;
+  headlineLead?: number;
   subBold?: boolean;
   subItalic?: boolean;
   subScale?: number;
+  subTrack?: number;
+  subLead?: number;
   ctaBold?: boolean;
   ctaItalic?: boolean;
   ctaScale?: number;
+  ctaTrack?: number;
+  ctaLead?: number;
 }
 
 function cleanCoord(value: unknown): number | null | undefined {
@@ -200,6 +206,18 @@ function cleanCoord(value: unknown): number | null | undefined {
 function cleanScale(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.min(1.6, Math.max(0.7, Math.round(value * 20) / 20));
+}
+
+/** Letter spacing as a fraction of the font size. */
+function cleanTrack(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(0.25, Math.max(0, Math.round(value * 100) / 100));
+}
+
+/** Line-height multiplier relative to the layout default. */
+function cleanLead(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(1.6, Math.max(0.85, Math.round(value * 20) / 20));
 }
 
 export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
@@ -247,6 +265,18 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (hs !== undefined) patch.headlineScale = hs;
   if (ss !== undefined) patch.subScale = ss;
   if (cs !== undefined) patch.ctaScale = cs;
+  const ht = cleanTrack(body.headlineTrack);
+  const st = cleanTrack(body.subTrack);
+  const ct = cleanTrack(body.ctaTrack);
+  if (ht !== undefined) patch.headlineTrack = ht;
+  if (st !== undefined) patch.subTrack = st;
+  if (ct !== undefined) patch.ctaTrack = ct;
+  const hl = cleanLead(body.headlineLead);
+  const sl = cleanLead(body.subLead);
+  const cl = cleanLead(body.ctaLead);
+  if (hl !== undefined) patch.headlineLead = hl;
+  if (sl !== undefined) patch.subLead = sl;
+  if (cl !== undefined) patch.ctaLead = cl;
   return patch;
 }
 

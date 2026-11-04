@@ -9,6 +9,15 @@ function typeFace(bold: boolean, italic: boolean, sizePx: number): string {
   return `${style} ${weight} ${Math.max(8, Math.round(sizePx))}px Arial`;
 }
 
+function applyTrack(ctx: CanvasRenderingContext2D, trackEm: number, sizePx: number): void {
+  const spacing = `${Math.max(0, trackEm) * sizePx}px`;
+  try {
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = spacing;
+  } catch {
+    // Older engines ignore letterSpacing; size and weight still apply.
+  }
+}
+
 export interface DrawAdOptions {
   /** Brand mark composited on the canvas so its bounds are known and text can clear it. */
   logo?: HTMLImageElement | null;
@@ -263,8 +272,8 @@ export function drawAd(
   const hSize = Math.round(width * (layout === 'bottom' ? 0.085 : 0.098) * headStyle.scale);
   const sSize = Math.round(width * 0.042 * subStyle.scale);
   const cSize = Math.round(width * 0.036 * ctaStyle.scale);
-  const hLead = hSize * 1.12;
-  const sLead = sSize * 1.3;
+  const hLead = hSize * 1.12 * headStyle.lead;
+  const sLead = sSize * 1.3 * subStyle.lead;
   const gapHS = hSize * 0.3;
   const gapCta = width * 0.045;
   const barH = Math.max(4, Math.round(width * 0.008));
@@ -276,19 +285,22 @@ export function drawAd(
     : maxW;
 
   ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize);
+  applyTrack(ctx, headStyle.track, hSize);
   const hLines = showHeadline ? wrap(ctx, version.headline.trim(), textMaxW).slice(0, 4) : [];
   const hW = Math.min(textMaxW, widest(ctx, hLines));
   const hH = hLines.length * hLead;
 
   ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize);
+  applyTrack(ctx, subStyle.track, sSize);
   const sLines = showSub ? wrap(ctx, version.sub.trim(), textMaxW).slice(0, 3) : [];
   const sW = Math.min(textMaxW, widest(ctx, sLines));
   const sH = sLines.length * sLead;
 
   ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize);
+  applyTrack(ctx, ctaStyle.track, cSize);
   const ctaText = version.cta.trim();
   const ctaW = showCta ? Math.min(textMaxW, ctx.measureText(ctaText).width + width * 0.09 * ctaStyle.scale) : 0;
-  const ctaH = showCta ? width * 0.095 * ctaStyle.scale : 0;
+  const ctaH = showCta ? width * 0.095 * Math.max(ctaStyle.scale, ctaStyle.lead * 0.85) : 0;
 
   const blockH = (showHeadline ? hH : 0)
     + (showSub ? (showHeadline ? gapHS : 0) + sH : 0)
@@ -401,6 +413,7 @@ export function drawAd(
 
   if (headSpot) {
     ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize);
+    applyTrack(ctx, headStyle.track, hSize);
     ctx.fillStyle = ink;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
@@ -415,6 +428,7 @@ export function drawAd(
 
   if (subSpot) {
     ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize);
+    applyTrack(ctx, subStyle.track, sSize);
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.92;
     ctx.textAlign = 'left';
@@ -430,6 +444,7 @@ export function drawAd(
 
   if (ctaSpot) {
     ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize);
+    applyTrack(ctx, ctaStyle.track, cSize);
     ctx.fillStyle = ctaFill;
     ctx.beginPath();
     ctx.roundRect(ctaSpot.x, ctaSpot.y, ctaW, ctaH, ctaH / 2);

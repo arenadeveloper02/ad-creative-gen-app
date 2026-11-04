@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
+  clearPopupOrigin,
   positionPatch,
   readTextStyle,
   readTextValue,
@@ -621,9 +622,11 @@ function AdStage({
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number; moved: boolean } | null>(null);
+  const popDragRef = useRef<{ ox: number; oy: number; x: number; y: number } | null>(null);
   const [frame, setFrame] = useState({ sw: 1, sh: 1, cw: 1, ch: 1 });
   const [dragLive, setDragLive] = useState<{ kind: TextKind; x: number; y: number } | null>(null);
   const [boxes, setBoxes] = useState<TextBox[]>([]);
+  const [popPos, setPopPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -645,12 +648,20 @@ function AdStage({
     return () => ro.disconnect();
   }, [version, brand, image, logo, dragLive]);
 
+  // Fresh open → park the popup clear of the selected text; user can drag it anywhere after.
+  useEffect(() => {
+    setPopPos(null);
+  }, [editingKind, version.id]);
+
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
   const editBox = editingKind ? boxes.find((box) => box.kind === editingKind) ?? null : null;
   const editStyle = editingKind ? readTextStyle(version, editingKind) : null;
   const sizeLabel = editStyle ? Math.round(editStyle.scale * 100) : 100;
-  const popW = 220;
+  const trackLabel = editStyle ? Math.round(editStyle.track * 100) : 0;
+  const leadLabel = editStyle ? Math.round(editStyle.lead * 100) : 100;
+  const popW = 236;
+  const popH = 320;
 
   function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -703,15 +714,51 @@ function AdStage({
     }
   }
 
-  let popLeft = 8;
-  let popTop = 8;
-  if (editBox) {
-    const boxLeft = editBox.x * scaleX;
-    const boxTop = editBox.y * scaleY;
-    popLeft = boxLeft - popW - 14;
-    if (popLeft < 8) popLeft = Math.min(frame.sw - popW - 8, boxLeft + editBox.w * scaleX + 14);
-    popTop = Math.max(8, Math.min(boxTop, Math.max(8, frame.sh - 220)));
+  function onPopPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const stage = stageRef.current;
+    if (!stage) return;
+    const origin = popPos ?? (editBox
+      ? clearPopupOrigin(editBox, scaleX, scaleY, frame.sw, frame.sh, popW, popH)
+      : { x: 8, y: 8 });
+    const rect = stage.getBoundingClientRect();
+    popDragRef.current = {
+      ox: event.clientX - rect.left - origin.x,
+      oy: event.clientY - rect.top - origin.y,
+      x: origin.x,
+      y: origin.y,
+    };
+    setPopPos(origin);
+    event.currentTarget.setPointerCapture(event.pointerId);
   }
+
+  function onPopPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = popDragRef.current;
+    const stage = stageRef.current;
+    if (!drag || !stage) return;
+    const rect = stage.getBoundingClientRect();
+    const x = Math.min(Math.max(-40, event.clientX - rect.left - drag.ox), Math.max(8, frame.sw - 48));
+    const y = Math.min(Math.max(-20, event.clientY - rect.top - drag.oy), Math.max(8, frame.sh - 48));
+    drag.x = x;
+    drag.y = y;
+    setPopPos({ x, y });
+  }
+
+  function onPopPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    popDragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Capture may already be released.
+    }
+  }
+
+  const defaultPop = editBox
+    ? clearPopupOrigin(editBox, scaleX, scaleY, frame.sw, frame.sh, popW, popH)
+    : { x: 8, y: 8 };
+  const popLeft = popPos?.x ?? defaultPop.x;
+  const popTop = popPos?.y ?? defaultPop.y;
 
   return (
     <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}${editingKind ? ' editing' : ''}`}>
@@ -754,7 +801,17 @@ function AdStage({
           role="dialog"
           aria-label={`Edit ${textKindLabel(editingKind)}`}
         >
-          <p className="text-edit-pop-title">{textKindLabel(editingKind)}</p>
+          <div
+            className="text-edit-pop-drag"
+            onPointerDown={onPopPointerDown}
+            onPointerMove={onPopPointerMove}
+            onPointerUp={onPopPointerUp}
+            onPointerCancel={onPopPointerUp}
+            title="Drag to move"
+          >
+            <p className="text-edit-pop-title">{textKindLabel(editingKind)}</p>
+            <span className="text-edit-pop-grip" aria-hidden="true">⋮⋮</span>
+          </div>
           <textarea
             className="text-edit-pop-input"
             rows={editingKind === 'cta' ? 2 : 3}
@@ -802,7 +859,55 @@ function AdStage({
               +
             </button>
           </div>
-          <p className="hint text-edit-pop-hint">Drag the text on the ad to move it. Size updates live.</p>
+          <div className="text-edit-pop-row">
+            <span className="text-edit-pop-label">Letter space</span>
+            <div className="text-edit-pop-tools">
+              <button
+                type="button"
+                className="text-style-btn"
+                title="Tighter"
+                disabled={editStyle.track <= 0}
+                onClick={() => onStyle(editingKind, { track: editStyle.track - 0.01 })}
+              >
+                −
+              </button>
+              <span className="text-style-size" aria-live="polite">{trackLabel}</span>
+              <button
+                type="button"
+                className="text-style-btn"
+                title="Looser"
+                disabled={editStyle.track >= 0.25}
+                onClick={() => onStyle(editingKind, { track: editStyle.track + 0.01 })}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="text-edit-pop-row">
+            <span className="text-edit-pop-label">Line gap</span>
+            <div className="text-edit-pop-tools">
+              <button
+                type="button"
+                className="text-style-btn"
+                title="Tighter lines"
+                disabled={editStyle.lead <= 0.85}
+                onClick={() => onStyle(editingKind, { lead: editStyle.lead - 0.05 })}
+              >
+                −
+              </button>
+              <span className="text-style-size" aria-live="polite">{leadLabel}</span>
+              <button
+                type="button"
+                className="text-style-btn"
+                title="More line space"
+                disabled={editStyle.lead >= 1.6}
+                onClick={() => onStyle(editingKind, { lead: editStyle.lead + 0.05 })}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <p className="hint text-edit-pop-hint">Drag the grey bar to move this panel. Drag the text on the ad to reposition it.</p>
           <button type="button" className="btn sm text-edit-pop-save" onClick={onSaveEdit}>
             Save
           </button>

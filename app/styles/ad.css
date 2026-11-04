@@ -63,18 +63,33 @@
 .text-edit-pop {
   position: absolute; z-index: 6; box-sizing: border-box;
   display: flex; flex-direction: column; gap: 10px;
-  padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.98);
+  padding: 10px 12px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.98);
   border: 1px solid var(--aurora-line); box-shadow: var(--aurora-shadow-sm); backdrop-filter: blur(10px);
 }
+.text-edit-pop-drag {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: -2px -4px 0; padding: 6px 4px 8px; cursor: grab; touch-action: none;
+  border-bottom: 1px solid var(--aurora-line);
+}
+.text-edit-pop-drag:active { cursor: grabbing; }
 .text-edit-pop-title {
   margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--aurora-text3);
+}
+.text-edit-pop-grip {
+  font-size: 12px; letter-spacing: -2px; color: var(--aurora-text3); line-height: 1; user-select: none;
 }
 .text-edit-pop-input {
   width: 100%; min-height: 72px; margin: 0; resize: vertical;
   font-size: 13px; line-height: 1.4; padding: 10px 12px; border-radius: 10px;
 }
-.text-edit-pop-tools { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.text-edit-pop-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.text-edit-pop-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.text-edit-pop-label {
+  font-size: 11px; font-weight: 600; color: var(--aurora-text3); white-space: nowrap;
+}
 .text-edit-pop-hint { margin: 0; }
 .text-edit-pop-save { width: 100%; margin-top: 2px; }
 .text-style-btn {

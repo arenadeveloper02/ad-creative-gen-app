@@ -15,6 +15,10 @@ export interface TextStyle {
   bold: boolean;
   italic: boolean;
   scale: number;
+  /** Letter spacing as a fraction of font size (0–0.25). */
+  track: number;
+  /** Line-height multiplier vs the layout default (0.85–1.6). */
+  lead: number;
 }
 
 function clamp01(value: number): number {
@@ -25,6 +29,16 @@ function clamp01(value: number): number {
 export function clampTextScale(value: number): number {
   if (!Number.isFinite(value)) return 1;
   return Math.min(1.6, Math.max(0.7, Math.round(value * 20) / 20));
+}
+
+export function clampTextTrack(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(0.25, Math.max(0, Math.round(value * 100) / 100));
+}
+
+export function clampTextLead(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1.6, Math.max(0.85, Math.round(value * 20) / 20));
 }
 
 export function positionPatch(kind: TextKind, x: number, y: number, width: number, height: number): Partial<VersionDTO> {
@@ -41,6 +55,8 @@ export function readTextStyle(version: VersionDTO, kind: TextKind): TextStyle {
       bold: version.headlineBold !== false,
       italic: version.headlineItalic === true,
       scale: clampTextScale(version.headlineScale ?? 1),
+      track: clampTextTrack(version.headlineTrack ?? 0),
+      lead: clampTextLead(version.headlineLead ?? 1),
     };
   }
   if (kind === 'sub') {
@@ -48,12 +64,16 @@ export function readTextStyle(version: VersionDTO, kind: TextKind): TextStyle {
       bold: version.subBold === true,
       italic: version.subItalic === true,
       scale: clampTextScale(version.subScale ?? 1),
+      track: clampTextTrack(version.subTrack ?? 0),
+      lead: clampTextLead(version.subLead ?? 1),
     };
   }
   return {
     bold: version.ctaBold !== false,
     italic: version.ctaItalic === true,
     scale: clampTextScale(version.ctaScale ?? 1),
+    track: clampTextTrack(version.ctaTrack ?? 0),
+    lead: clampTextLead(version.ctaLead ?? 1),
   };
 }
 
@@ -63,6 +83,8 @@ export function stylePatch(kind: TextKind, style: Partial<TextStyle>): Partial<V
       ...(typeof style.bold === 'boolean' ? { headlineBold: style.bold } : {}),
       ...(typeof style.italic === 'boolean' ? { headlineItalic: style.italic } : {}),
       ...(typeof style.scale === 'number' ? { headlineScale: clampTextScale(style.scale) } : {}),
+      ...(typeof style.track === 'number' ? { headlineTrack: clampTextTrack(style.track) } : {}),
+      ...(typeof style.lead === 'number' ? { headlineLead: clampTextLead(style.lead) } : {}),
     };
   }
   if (kind === 'sub') {
@@ -70,12 +92,16 @@ export function stylePatch(kind: TextKind, style: Partial<TextStyle>): Partial<V
       ...(typeof style.bold === 'boolean' ? { subBold: style.bold } : {}),
       ...(typeof style.italic === 'boolean' ? { subItalic: style.italic } : {}),
       ...(typeof style.scale === 'number' ? { subScale: clampTextScale(style.scale) } : {}),
+      ...(typeof style.track === 'number' ? { subTrack: clampTextTrack(style.track) } : {}),
+      ...(typeof style.lead === 'number' ? { subLead: clampTextLead(style.lead) } : {}),
     };
   }
   return {
     ...(typeof style.bold === 'boolean' ? { ctaBold: style.bold } : {}),
     ...(typeof style.italic === 'boolean' ? { ctaItalic: style.italic } : {}),
     ...(typeof style.scale === 'number' ? { ctaScale: clampTextScale(style.scale) } : {}),
+    ...(typeof style.track === 'number' ? { ctaTrack: clampTextTrack(style.track) } : {}),
+    ...(typeof style.lead === 'number' ? { ctaLead: clampTextLead(style.lead) } : {}),
   };
 }
 
@@ -99,4 +125,47 @@ export function textKindLabel(kind: TextKind): string {
   if (kind === 'headline') return 'Headline';
   if (kind === 'sub') return 'Subline';
   return 'CTA';
+}
+
+/**
+ * Places a popup of known size so it does not cover the selected text box.
+ * Prefers left, then right, then above, then below — all in stage CSS pixels.
+ */
+export function clearPopupOrigin(
+  box: TextBox,
+  scaleX: number,
+  scaleY: number,
+  stageW: number,
+  stageH: number,
+  popW: number,
+  popH: number,
+  gap = 14,
+): { x: number; y: number } {
+  const left = box.x * scaleX;
+  const top = box.y * scaleY;
+  const right = left + box.w * scaleX;
+  const bottom = top + box.h * scaleY;
+  const clamp = (x: number, y: number) => ({
+    x: Math.min(Math.max(8, x), Math.max(8, stageW - popW - 8)),
+    y: Math.min(Math.max(8, y), Math.max(8, stageH - popH - 8)),
+  });
+
+  const candidates = [
+    { x: left - popW - gap, y: top }, // left
+    { x: right + gap, y: top }, // right
+    { x: left, y: top - popH - gap }, // above
+    { x: left, y: bottom + gap }, // below
+  ];
+
+  for (const spot of candidates) {
+    const next = clamp(spot.x, spot.y);
+    const overlaps =
+      next.x < right + gap
+      && next.x + popW > left - gap
+      && next.y < bottom + gap
+      && next.y + popH > top - gap;
+    if (!overlaps) return next;
+  }
+  // Last resort: park in the top-left of the stage, clear of the box as much as possible.
+  return clamp(8, 8);
 }
