@@ -48,7 +48,7 @@ interface BriefStepProps {
   saving: boolean;
   error: string | null;
   onContinue: (data: BriefPayload) => void;
-  onDraft: (data: BriefPayload) => void;
+  onDraft: (data: BriefPayload | null) => void;
   onProfiles: (profiles: ProfileDTO[]) => void;
 }
 
@@ -282,10 +282,10 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setLookingUp(true);
     setStatus('');
     setStatusKind('');
-    // Drop the previous company's files immediately so Apple (etc.) never stays on screen during the new hunt.
-    setAssets([]);
-    setRenderAssetIds([]);
-    aiAssetIds.current = new Set();
+    // Do not clear assets here. Clearing queued a draft with an empty file list that deleted
+    // the new logos from the DB before Save profile could attach them.
+    // Cancel any draft already scheduled so it cannot race the new files.
+    onDraft(null);
 
     const res = await fetch('/api/brand-guidelines', {
       method: 'POST',
@@ -293,14 +293,15 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       body: JSON.stringify({
         brandName: name,
         website: website.trim(),
-        projectId: project?.id ?? undefined,
+        // Leave files unassigned; linking to the project here raced with draft sync and deleted them.
+        projectId: undefined,
         profileId: undefined,
       }),
     });
     const parsed = await readJson(res);
     if (ticket !== lookupAbort.current) return;
-    setLookingUp(false);
     if (!parsed.ok) {
+      setLookingUp(false);
       setStatus(parsed.error);
       setStatusKind('err');
       return;
@@ -328,19 +329,11 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const nextC1 = typeof data.c1 === 'string' ? data.c1 : c1;
     const nextC2 = typeof data.c2 === 'string' ? data.c2 : c2;
     const nextC3 = typeof data.c3 === 'string' ? data.c3 : c3;
-    setBrandName(nextBrand);
-    setProduct(nextProduct);
-    if (typeof data.website === 'string' && data.website.trim() !== '' && website.trim() === '') setWebsite(data.website);
-    setC1(nextC1);
-    setC2(nextC2);
-    setC3(nextC3);
     const found = Array.isArray(data.assets) ? data.assets.filter((item) => item && typeof item.id === 'string') : [];
-    // Logos, fonts and creatives belong to this company only: everything from before is replaced.
+    // Replace the previous company's files only after the new ones arrived.
     const nextAssets = found;
     const nextRender = defaultRenderIds(nextAssets);
     aiAssetIds.current = new Set(found.map((item) => item.id));
-    setAssets(nextAssets);
-    setRenderAssetIds(nextRender);
 
     const counts = data.counts ?? {};
     const bits: string[] = [];
@@ -352,7 +345,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const summary = typeof data.summary === 'string' && data.summary.trim() !== '' ? ` ${data.summary.trim()}` : '';
     const filled = bits.length ? ` Pulled ${bits.join(', ')} from the brand site — everything stays editable.` : ' No logo, fonts or creatives were reachable online — upload them below if you have them.';
 
-    // Save it as a profile straight away so it shows under Use existing next time.
+    // Save the profile while drafts are still paused (lookingUp), then show the new files.
     if (brandMode === 'ai') {
       const saved = await persistProfile({
         name: profileName.trim() || nextBrand.trim(),
@@ -365,12 +358,38 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         overwrite: true,
         stayInAiMode: true,
       });
+      if (ticket !== lookupAbort.current) {
+        // A newer Fill with AI owns lookingUp; do not clear it.
+        return;
+      }
+      setBrandName(nextBrand);
+      setProduct(nextProduct);
+      if (typeof data.website === 'string' && data.website.trim() !== '' && website.trim() === '') setWebsite(data.website);
+      setC1(nextC1);
+      setC2(nextC2);
+      setC3(nextC3);
+      setAssets(saved ? saved.assets : nextAssets);
+      setRenderAssetIds(defaultRenderIds(saved ? saved.assets : nextAssets));
+      setLookingUp(false);
       if (saved) {
         setStatus(`Brand filled with AI and saved as profile "${saved.name}".${filled}${fontNote}${summary}`);
         setStatusKind('ok');
         return;
       }
+      setStatus(`Brand colours filled with AI.${filled}${fontNote}${summary}`);
+      setStatusKind('ok');
+      return;
     }
+
+    setBrandName(nextBrand);
+    setProduct(nextProduct);
+    if (typeof data.website === 'string' && data.website.trim() !== '' && website.trim() === '') setWebsite(data.website);
+    setC1(nextC1);
+    setC2(nextC2);
+    setC3(nextC3);
+    setAssets(nextAssets);
+    setRenderAssetIds(nextRender);
+    setLookingUp(false);
     setStatus(`Brand colours filled with AI.${filled}${fontNote}${summary}`);
     setStatusKind('ok');
   }
@@ -471,10 +490,12 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const onDraftRef = useRef(onDraft);
   onDraftRef.current = onDraft;
   useEffect(() => {
+    // While Fill with AI is running, skip drafts so we never save an empty or half-replaced file list.
+    if (lookingUp) return;
     onDraftRef.current(draftPayload());
     // draftPayload reads the fields listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [description, sceneNote, goal, brandName, product, profileId, c1, c2, c3, assets, renderAssetIds]);
+  }, [description, sceneNote, goal, brandName, product, profileId, c1, c2, c3, assets, renderAssetIds, lookingUp]);
 
   function payload(ids: string[]): BriefPayload {
     return {

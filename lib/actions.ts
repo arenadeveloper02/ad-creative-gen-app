@@ -83,7 +83,8 @@ export async function attachAssetsToProfile(
     where: { id: { in: unique }, ownerEmail },
     select: { id: true, kind: true, name: true, mimeType: true, size: true, data: true, projectId: true, profileId: true },
   });
-  if (rows.length !== unique.length) return { ok: false, error: 'One of those files is not available.' };
+  // Attach whatever still exists. Missing ids are usually from a draft race; failing the whole save is worse.
+  if (rows.length === 0) return { ok: false, error: 'One of those files is not available.' };
 
   const claimIds: string[] = [];
   const clones: typeof rows = [];
@@ -155,7 +156,8 @@ function fingerprint(row: { kind: string; name: string; size: number }): string 
 /**
  * Makes the project's files match the brief's current brand.
  * Claims or copies the keep-list first, then drops anything else (old Apple files, etc.).
- * Never issues a Prisma `in: []` filter — that throws and surfaces as HTTP 500.
+ * An empty keep-list is ignored — never wipe the project. That empty list was racing with
+ * Fill with AI and deleting logos before Save profile could attach them.
  */
 export async function syncBriefAssets(
   ownerEmail: string,
@@ -163,12 +165,14 @@ export async function syncBriefAssets(
   assetIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const unique = [...new Set(assetIds.filter(isId))];
-  const keepRows = unique.length
-    ? await prisma.adAsset.findMany({
-        where: { id: { in: unique }, ownerEmail },
-        select: { id: true, kind: true, name: true, mimeType: true, size: true, data: true, projectId: true, profileId: true },
-      })
-    : [];
+  if (unique.length === 0) return { ok: true };
+
+  const keepRows = await prisma.adAsset.findMany({
+    where: { id: { in: unique }, ownerEmail },
+    select: { id: true, kind: true, name: true, mimeType: true, size: true, data: true, projectId: true, profileId: true },
+  });
+  // If every id is already gone, do not delete the project's current files.
+  if (keepRows.length === 0) return { ok: true };
 
   const claimIds = keepRows.filter((row) => row.projectId === null && row.profileId === null).map((row) => row.id);
   if (claimIds.length > 0) {

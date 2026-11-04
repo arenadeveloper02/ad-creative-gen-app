@@ -134,13 +134,21 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     return parsed.data;
   }
 
-  function queueBrief(data: BriefPayload) {
+  function queueBrief(data: BriefPayload | null) {
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    // null = pause drafts (Fill with AI in flight) so a queued save cannot wipe new brand files.
+    if (!data) {
+      pendingBrief.current = null;
+      return;
+    }
     const meaningful = data.description !== '' || data.brandName !== '' || data.product !== '' || data.assetIds.length > 0;
     pendingBrief.current = meaningful ? data : null;
     if (!meaningful) return;
-    if (draftTimer.current) window.clearTimeout(draftTimer.current);
     draftTimer.current = window.setTimeout(() => {
-      const job = writeProject(data).then(() => undefined);
+      const payload = pendingBrief.current;
+      if (!payload) return;
+      pendingBrief.current = null;
+      const job = writeProject(payload).then(() => undefined);
       createLock.current = job;
       void job.finally(() => {
         if (createLock.current === job) createLock.current = null;
