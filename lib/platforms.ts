@@ -29,21 +29,32 @@ export const PLATFORMS: Record<string, readonly string[]> = {
 };
 
 export const SIZE_FOR: Record<string, string> = {
+  // True 1:1 / square — stay 1080×1080
+  'Feed 1:1': '1080x1080',
+  'Square 1:1': '1080x1080',
+  // 9:16 vertical
   'Story 9:16': '1080x1920',
   'Reel 9:16': '1080x1920',
   'In-feed 9:16': '1080x1920',
   'Spark ad 9:16': '1080x1920',
   'Idea pin 9:16': '1080x1920',
+  // 3:4 / 2:3 portrait
+  'Carousel 3:4': '1080x1440',
+  'Standard 2:3': '1080x1350',
+  // Landscape / display
   'Display 300×250': '300x250',
+  'Display 728×90': '728x90',
   'Single image 1.91:1': '1200x628',
   'Responsive 1.91:1': '1200x628',
   'Image post 16:9': '1200x628',
   'YouTube thumbnail': '1200x628',
-  'Standard 2:3': '1080x1350',
-  'Carousel 3:4': '1080x1440',
+  'Document ad': '1200x628',
+  'Message ad': '1200x628',
+  'Sponsored brand': '1200x628',
+  'Display banner': '300x250',
 };
 
-export const SIZES = ['1080x1080', '1080x1350', '1080x1440', '1080x1920', '1200x628', '300x250'] as const;
+export const SIZES = ['1080x1080', '1080x1350', '1080x1440', '1080x1920', '1200x628', '728x90', '300x250'] as const;
 
 export const LAYOUTS = ['left', 'center', 'bottom'] as const;
 export const BACKGROUNDS = ['photo', 'gradient', 'solid', 'light'] as const;
