@@ -81,7 +81,8 @@
 }
 .text-edit-pop-input {
   width: 100%; min-height: 72px; margin: 0; resize: vertical;
-  font-size: 13px; line-height: 1.4; padding: 10px 12px; border-radius: 10px;
+  font-size: 13px; line-height: 1.4; padding: 12px 16px; border-radius: 10px;
+  box-sizing: border-box; text-indent: 0;
 }
 .text-edit-pop-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .text-edit-pop-row {

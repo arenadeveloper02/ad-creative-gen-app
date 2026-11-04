@@ -22,11 +22,11 @@
   --aurora-r-lg: 28px;
   /* One control language for every text field and dropdown in the app. */
   --control-radius: 16px;
-  --control-pad-y: 16px;
-  --control-pad-x: 18px;
+  --control-pad-y: 18px;
+  --control-pad-x: 22px;
   --control-font: 15px;
   --control-line: 1.45;
-  --control-height: 56px;
+  --control-height: 58px;
   --aurora-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --aurora-bg: #f6f6fc;
   --aurora-bg2: #eeeefa;
@@ -334,6 +334,9 @@ select {
   border-radius: var(--control-radius);
   color: var(--aurora-text);
   padding: var(--control-pad-y) var(--control-pad-x);
+  padding-inline: var(--control-pad-x);
+  padding-block: var(--control-pad-y);
+  text-indent: 0;
   font-size: var(--control-font);
   line-height: var(--control-line);
   font-family: inherit;
@@ -353,11 +356,12 @@ select {
   appearance: none;
   -webkit-appearance: none;
   height: var(--control-height);
+  padding-left: var(--control-pad-x);
   padding-right: 44px;
   background-color: var(--aurora-glass2);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%233a3658' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 16px center;
+  background-position: right 18px center;
   background-size: 16px 16px;
 }
 html.dark select {
@@ -369,7 +373,7 @@ textarea {
   height: auto;
   resize: vertical;
   line-height: 1.55;
-  padding: var(--control-pad-y) var(--control-pad-x);
+  padding: 20px var(--control-pad-x);
 }
 textarea.script { min-height: 200px; }
 textarea.short { min-height: 88px; }
