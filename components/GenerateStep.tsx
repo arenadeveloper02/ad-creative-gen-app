@@ -397,14 +397,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   // Extra versions show loaders only. Thinking streams for the first generate, redraws, and single-image edits.
   const thinkingNow = redrawIds.length > 0 || (busy && !appendBusy);
 
-  function plannedLetters(count: number): string {
-    const start = project.versions.length;
-    const names = Array.from({ length: count }, (_, index) => letter(start + index));
-    if (names.length <= 1) return names[0] ?? '';
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
-    return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
-  }
-
   function imageReady(version: VersionDTO): boolean {
     if (!isHttpsUrl(version.imageUrl)) return false;
     return loadedUrls[version.imageUrl] !== undefined;
@@ -467,6 +459,88 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
         {!showCreating && active && (
           <div className="preview-grid">
             <div className="gen-focus-col">
+              <div className="gen-rail-bar">
+                <div className="gen-rail" role="listbox" aria-label="Ad versions">
+                  {project.versions.map((version) => (
+                    <button
+                      key={version.id}
+                      type="button"
+                      role="option"
+                      aria-selected={version.id === active.id}
+                      className={`gen-rail-item${version.id === active.id ? ' on' : ''}`}
+                      onClick={() => setActiveId(version.id)}
+                    >
+                      <span className="gen-rail-label">
+                        <strong>{letter(version.position)}</strong>
+                        <span>{version.size.replace('x', '×')}</span>
+                      </span>
+                      {extraPending(version) ? (
+                        <div className="gen-rail-wait" aria-hidden="true">
+                          <span className="ad-spinner sm" />
+                        </div>
+                      ) : (
+                        <AdStage
+                          compact
+                          version={version}
+                          brand={project.brandName}
+                          image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
+                          logo={logoReady ? logoCache.current : null}
+                          active={version.id === active.id}
+                          editingKind={null}
+                          onCanvas={(node) => {
+                            if (version.id === active.id) return;
+                            canvasRefs.current[version.id] = node;
+                          }}
+                          onMove={() => {}}
+                          onStyle={() => {}}
+                          onText={() => {}}
+                          onOpenEdit={() => setActiveId(version.id)}
+                          onSaveEdit={() => {}}
+                        />
+                      )}
+                    </button>
+                  ))}
+                  {Array.from({ length: stillNeeded }, (_, index) => {
+                    const position = project.versions.length + index;
+                    return (
+                      <div key={`pending-${position}`} className="gen-rail-item pending" aria-hidden="true">
+                        <span className="gen-rail-label"><strong>{letter(position)}</strong></span>
+                        <div className="gen-rail-wait">
+                          <span className="ad-spinner sm" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="gen-rail-more">
+                  <label htmlFor="moreCount" className="sr-only">Add more versions</label>
+                  <input
+                    id="moreCount"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="+"
+                    title={room === 0 ? `Already at ${MAX_VERSIONS} versions` : `Add 1–${room} more`}
+                    value={moreText}
+                    disabled={busy || appendBusy || room === 0}
+                    onChange={(e) => setMoreText(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  />
+                  <button type="button" className="btn ghost sm" disabled={busy || appendBusy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) requestAdd(count); }}>
+                    {appendBusy ? '…' : typedCount() === null ? 'Add' : `+${typedCount()}`}
+                  </button>
+                </div>
+              </div>
+              {appendBusy && (
+                <p className="hint creating-live">
+                  Adding versions in the strip above — selected ad stays as it is.
+                </p>
+              )}
+              <p className="hint gen-rail-hint">
+                {room === 0
+                  ? `You already have ${MAX_VERSIONS} versions.`
+                  : 'Pick a miniature above, then edit the large preview. Add more versions from the + control.'}
+              </p>
+
               <div className="gen-focus-card">
                 <div className="vhead">
                   <strong>Version {letter(active.position)}</strong>
@@ -505,115 +579,32 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     onSaveEdit={() => setTextEdit(null)}
                   />
                 )}
-                <div className="vcopy">{active.primary}</div>
-                <p className="hint" style={{ marginTop: 6 }}>
+                <p className="hint gen-focus-status">
                   {extraPending(active)
                     ? 'Still drawing this version…'
-                    : `${imageState(active)}. Click text on the preview to edit. Drag to reposition.`}
+                    : `${imageState(active)}. Click text to edit · drag to move.`}
                 </p>
-                <label htmlFor={`edit-${active.id}`}>Update this image</label>
-                <p className="hint">Describe the change on top of the latest picture. Edits this version only.</p>
-                <textarea
-                  id={`edit-${active.id}`}
-                  className="short"
-                  value={edits[active.id] ?? ''}
-                  placeholder="e.g. Brighter daylight, remove the flowers on the table"
-                  onChange={(e) => setEdits((current) => ({ ...current, [active.id]: e.target.value }))}
-                />
-                <button
-                  type="button"
-                  className="btn sm"
-                  style={{ marginTop: 8 }}
-                  disabled={busy || appendBusy || (edits[active.id] ?? '').trim() === ''}
-                  onClick={() => requestImage(active.id, edits[active.id] ?? '')}
-                >
-                  {busy && !appendBusy ? 'Working…' : 'Update this image'}
-                </button>
-              </div>
-
-              <div className="gen-rail" role="listbox" aria-label="Ad versions">
-                {project.versions.map((version) => (
-                  <button
-                    key={version.id}
-                    type="button"
-                    role="option"
-                    aria-selected={version.id === active.id}
-                    className={`gen-rail-item${version.id === active.id ? ' on' : ''}`}
-                    onClick={() => setActiveId(version.id)}
-                  >
-                    <span className="gen-rail-label">
-                      <strong>{letter(version.position)}</strong>
-                      <span>{version.size.replace('x', '×')}</span>
-                    </span>
-                    {extraPending(version) ? (
-                      <div className="gen-rail-wait" aria-hidden="true">
-                        <span className="ad-spinner sm" />
-                      </div>
-                    ) : (
-                      <AdStage
-                        compact
-                        version={version}
-                        brand={project.brandName}
-                        image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
-                        logo={logoReady ? logoCache.current : null}
-                        active={version.id === active.id}
-                        editingKind={null}
-                        onCanvas={(node) => {
-                          if (version.id === active.id) return;
-                          canvasRefs.current[version.id] = node;
-                        }}
-                        onMove={() => {}}
-                        onStyle={() => {}}
-                        onText={() => {}}
-                        onOpenEdit={() => setActiveId(version.id)}
-                        onSaveEdit={() => {}}
-                      />
-                    )}
-                  </button>
-                ))}
-                {Array.from({ length: stillNeeded }, (_, index) => {
-                  const position = project.versions.length + index;
-                  return (
-                    <div key={`pending-${position}`} className="gen-rail-item pending" aria-hidden="true">
-                      <span className="gen-rail-label"><strong>{letter(position)}</strong></span>
-                      <div className="gen-rail-wait">
-                        <span className="ad-spinner sm" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {appendBusy && (
-                <p className="hint creating-live" style={{ marginTop: 12 }}>
-                  Adding more versions — selected ad stays as it is. New thumbs show a loader.
-                </p>
-              )}
-              <div className="more-row">
-                <div>
-                  <label htmlFor="moreCount">Add more versions</label>
-                  <input
-                    id="moreCount"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="4"
-                    value={moreText}
-                    disabled={busy || appendBusy || room === 0}
-                    onChange={(e) => setMoreText(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                <div className="gen-image-edit">
+                  <label htmlFor={`edit-${active.id}`}>Update this image</label>
+                  <textarea
+                    id={`edit-${active.id}`}
+                    className="gen-image-edit-input"
+                    rows={2}
+                    value={edits[active.id] ?? ''}
+                    placeholder="e.g. Brighter daylight, remove the flowers"
+                    onChange={(e) => setEdits((current) => ({ ...current, [active.id]: e.target.value }))}
                   />
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={busy || appendBusy || (edits[active.id] ?? '').trim() === ''}
+                    onClick={() => requestImage(active.id, edits[active.id] ?? '')}
+                  >
+                    {busy && !appendBusy ? 'Working…' : 'Update this image'}
+                  </button>
                 </div>
-                <button type="button" className="btn ghost sm" disabled={busy || appendBusy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) requestAdd(count); }}>
-                  {appendBusy ? 'Adding…' : typedCount() === null ? 'Generate' : `Generate ${typedCount()}`}
-                </button>
               </div>
-              <p className="hint">
-                {room === 0
-                  ? `You already have ${MAX_VERSIONS} versions.`
-                  : typedCount() === null
-                    ? `Type a number from 1 to ${room}.`
-                    : `${typedCount()} adds ${plannedLetters(typedCount() ?? 1)}. Up to ${MAX_VERSIONS} total.`}
-              </p>
+
               <div className="gen-secondary">
                 <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
                   Download all versions
@@ -621,8 +612,8 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
               {!allReady && <p className="hint">Download all opens after every image has finished.</p>}
               {zipNote && <p className="hint">{zipNote}</p>}
-              <div className="card gen-meta-card">
-                <h4>Primary text</h4>
+              <details className="gen-meta-card">
+                <summary>Primary text &amp; details</summary>
                 <p>{active.primary}</p>
                 <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel} · {project.imageResolution}</p>
                 {active.imagePrompt && (
@@ -631,7 +622,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     <pre className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{active.imagePrompt}</pre>
                   </details>
                 )}
-              </div>
+              </details>
             </div>
 
             <div className="gen-side">
