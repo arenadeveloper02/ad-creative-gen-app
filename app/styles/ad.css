@@ -192,6 +192,10 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--aurora-text3);
 }
 .gen-actions .btn { width: 100%; justify-content: center; }
+.gen-actions .gen-delete {
+  margin-top: 4px; color: var(--aurora-bad-text);
+  border-color: color-mix(in srgb, var(--aurora-bad-text) 28%, var(--aurora-line));
+}
 .guide-panel {
   margin-top: 14px; padding: 14px; border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--aurora-c1) 35%, var(--aurora-line));

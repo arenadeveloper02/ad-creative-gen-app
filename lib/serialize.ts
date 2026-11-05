@@ -119,15 +119,19 @@ export function serializeProfile(row: BrandProfile & { assets: AssetRow[] }): Pr
 }
 
 export function serializeListItem(
-  row: Pick<AdProject, 'id' | 'name' | 'platform' | 'status' | 'step' | 'createdAt' | 'updatedAt'> & {
-    versions?: { imageUrl: string | null }[];
+  row: Pick<AdProject, 'id' | 'name' | 'platform' | 'format' | 'imageResolution' | 'status' | 'step' | 'createdAt' | 'updatedAt'> & {
+    versions?: { imageUrl: string | null; size: string }[];
   },
 ): ProjectListItem {
   const preview = row.versions?.find((version) => typeof version.imageUrl === 'string' && /^https:\/\//i.test(version.imageUrl));
+  const lead = row.versions?.[0];
   return {
     id: row.id,
     name: row.name,
     platform: row.platform,
+    format: row.format,
+    imageResolution: row.imageResolution,
+    size: lead?.size ?? null,
     status: row.status,
     step: row.step,
     createdAt: row.createdAt.toISOString(),

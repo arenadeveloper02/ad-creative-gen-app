@@ -374,6 +374,19 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           onAdd={(count) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append', count })}
           onRewrite={(id, note) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'rewrite', versionId: id, note: note ?? '' })}
           onImage={(id, editPrompt) => void mutateWithThoughts({ mode: 'image', versionId: id, editPrompt })}
+          onDelete={() => {
+            void (async () => {
+              setError(null);
+              const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+              const parsed = await readJson(res);
+              if (!parsed.ok) {
+                setError(parsed.error);
+                return;
+              }
+              router.push('/');
+              router.refresh();
+            })();
+          }}
         />
       )}
     </>

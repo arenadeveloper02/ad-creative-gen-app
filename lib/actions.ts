@@ -32,6 +32,8 @@ export async function listProjects(ownerEmail: string): Promise<ProjectListItem[
       id: true,
       name: true,
       platform: true,
+      format: true,
+      imageResolution: true,
       status: true,
       step: true,
       createdAt: true,
@@ -39,7 +41,7 @@ export async function listProjects(ownerEmail: string): Promise<ProjectListItem[
       versions: {
         orderBy: { position: 'asc' },
         take: 4,
-        select: { imageUrl: true },
+        select: { imageUrl: true, size: true },
       },
     },
   });

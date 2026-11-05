@@ -124,6 +124,10 @@ export interface ProjectListItem {
   id: string;
   name: string;
   platform: string;
+  format: string;
+  imageResolution: string;
+  /** Lead version canvas size, when a version exists. */
+  size: string | null;
   status: string;
   step: number;
   createdAt: string;

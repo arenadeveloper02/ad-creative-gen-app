@@ -31,6 +31,7 @@ interface GenerateStepProps {
   onAdd: (count: number) => void;
   onRewrite: (id: string, note?: string) => void;
   onImage: (id: string, editPrompt: string) => void;
+  onDelete: () => void;
 }
 
 type GuideKind = 'rewrite' | 'refresh' | 'back';
@@ -123,7 +124,8 @@ function assetUrl(id: string): string {
   return `/api/assets/${encodeURIComponent(id)}`;
 }
 
-export default function GenerateStep({ project, generating, busy, thoughts, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, thoughts, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage, onDelete }: GenerateStepProps) {
+  const [deleting, setDeleting] = useState(false);
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
@@ -741,6 +743,18 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 </button>
                 <button type="button" className="btn ghost sm" disabled={!!guide} onClick={() => openGuide('back')}>
                   Change platform / brief
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost sm gen-delete"
+                  disabled={busy || working || deleting || !!guide}
+                  onClick={() => {
+                    if (!window.confirm('Delete this ad? This cannot be undone.')) return;
+                    setDeleting(true);
+                    onDelete();
+                  }}
+                >
+                  {deleting ? 'Deleting…' : 'Delete ad'}
                 </button>
               </div>
 
