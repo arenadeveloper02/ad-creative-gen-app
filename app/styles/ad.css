@@ -54,6 +54,37 @@
 }
 .brand-name-row input { flex: 1; min-width: 0; margin: 0; }
 .brand-name-row .btn { white-space: nowrap; align-self: center; flex: none; }
+
+.platform-pair {
+  margin: 8px 0 4px; padding: 14px 16px; border-radius: 16px;
+  border: 1px solid var(--aurora-line); background: var(--aurora-panel-2);
+}
+.platform-pair > label { margin-top: 0; }
+.platform-pair-formats { margin-top: 10px; }
+.ad-copy-block {
+  margin: 18px 0 8px; padding: 16px 16px 14px; border-radius: 16px;
+  border: 1px solid var(--aurora-line); background: var(--aurora-panel-2);
+}
+.ad-copy-block h4 { margin: 0 0 6px; font-size: 15px; }
+.copy-field { margin-top: 4px; }
+.copy-field-shell {
+  border: 1px solid var(--aurora-line); border-radius: var(--control-radius);
+  background: var(--aurora-glass2); overflow: hidden;
+}
+.copy-field-shell textarea {
+  width: 100%; min-height: 110px; margin: 0; border: 0; border-radius: 0;
+  box-shadow: none; background: transparent;
+}
+.copy-field-shell textarea:focus { box-shadow: none; outline: none; }
+.copy-field-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 8px 10px 10px; border-top: 1px solid var(--aurora-line);
+  background: color-mix(in srgb, var(--aurora-panel) 70%, transparent);
+}
+.copy-lines { margin-top: 12px; }
+.model-row { margin-top: 16px; }
+.platform-footer { margin-top: 22px; }
+.platform-generate { min-width: 160px; }
 .preview-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 24px;
   align-items: start;

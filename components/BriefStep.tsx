@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import HexColorField from '@/components/HexColorField';
 import { ASSET_KINDS, GOALS, type AssetKind } from '@/lib/platforms';
 import { readJson } from '@/lib/read-response';
 import type { AssetDTO, ProfileDTO, ProjectDTO } from '@/lib/types';
@@ -808,11 +809,11 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             ))}
             <div className="asset-card">
               <h4>Brand colors</h4>
-              <p className="hint">Primary, secondary and accent</p>
-              <div className="swatches">
-                <input type="color" value={c1} onChange={(e) => setC1(e.target.value)} aria-label="Primary color" />
-                <input type="color" value={c2} onChange={(e) => setC2(e.target.value)} aria-label="Secondary color" />
-                <input type="color" value={c3} onChange={(e) => setC3(e.target.value)} aria-label="Accent color" />
+              <p className="hint">Primary, secondary and accent — hex codes</p>
+              <div className="color-fields">
+                <HexColorField id="brief-c1" label="C1" value={c1} onChange={setC1} />
+                <HexColorField id="brief-c2" label="C2" value={c2} onChange={setC2} />
+                <HexColorField id="brief-c3" label="C3" value={c3} onChange={setC3} />
               </div>
             </div>
           </div>

@@ -93,13 +93,14 @@ export default function PlatformStep({ project, saving, error, returnNote, onBac
     }
     setPreview(null);
     setApproved(false);
-  }, [copyPrompt, avoid, audience, tone, cta, platform, format, copySource]);
+  }, [copyPrompt, avoid, audience, tone, cta, platform, format]);
 
   async function writeCopy() {
     setWriting(true);
     setWriteError(null);
     setApproved(false);
-    const result = await onPreview(currentPayload());
+    setCopySource('ai');
+    const result = await onPreview({ ...currentPayload(), copySource: 'ai' });
     setWriting(false);
     if (!result.ok) {
       setWriteError(result.error);
@@ -108,11 +109,23 @@ export default function PlatformStep({ project, saving, error, returnNote, onBac
     setPreview(result.versions);
   }
 
+  function approveCopy() {
+    const lead = preview?.[0];
+    if (lead) {
+      setHeadline(lead.headline);
+      setSubline(lead.sub);
+    }
+    setApproved(true);
+    setCopySource('ai');
+  }
+
   function pickPlatform(next: string) {
     setPlatform(next);
     const nextFormats = PLATFORMS[next] ?? [];
     setFormat(nextFormats[0] ?? 'Feed 1:1');
   }
+
+  const canGenerate = !saving && !writing && (approved || headline.trim() !== '');
 
   return (
     <div className="wide-single">
@@ -125,51 +138,22 @@ export default function PlatformStep({ project, saving, error, returnNote, onBac
           </div>
         ) : null}
 
-        <label>Platform</label>
-        <div className="chips">
-          {Object.keys(PLATFORMS).map((item) => (
-            <button key={item} type="button" className={`chip${platform === item ? ' on' : ''}`} onClick={() => pickPlatform(item)}>
-              {item}
-            </button>
-          ))}
-        </div>
-
-        <label>Format / placement</label>
-        <div className="chips">
-          {formats.map((item) => (
-            <button key={item} type="button" className={`chip${format === item ? ' on' : ''}`} onClick={() => setFormat(item)}>
-              {item}
-            </button>
-          ))}
-        </div>
-
-        <div className="row">
-          <div>
-            <label htmlFor="imageModel">Image model</label>
-            <select id="imageModel" value={imageModel} onChange={(e) => setImageModel(canonicalImageModel(e.target.value))}>
-              {IMAGE_MODELS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <p className="hint">{IMAGE_MODELS.find((item) => item.value === imageModel)?.hint}</p>
+        <div className="platform-pair">
+          <label>Platform &amp; format</label>
+          <p className="hint">Pick where it runs, then the placement for that platform.</p>
+          <div className="chips">
+            {Object.keys(PLATFORMS).map((item) => (
+              <button key={item} type="button" className={`chip${platform === item ? ' on' : ''}`} onClick={() => pickPlatform(item)}>
+                {item}
+              </button>
+            ))}
           </div>
-          <div>
-            <label htmlFor="imageResolution">Resolution</label>
-            <select
-              id="imageResolution"
-              value={resolutionChoices.includes(imageResolution) ? imageResolution : (resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION)}
-              onChange={(e) => setImageResolution(canonicalImageResolution(e.target.value))}
-              disabled={resolutionChoices.length <= 1}
-            >
-              {(resolutionChoices.length > 1 ? IMAGE_RESOLUTIONS.filter((item) => resolutionChoices.includes(item.value)) : [{ value: '1K' as const, label: 'Fixed by model' }]).map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <p className="hint">Default is Nano Banana Pro at 4K. Change either only when you need to.</p>
+          <div className="chips platform-pair-formats">
+            {formats.map((item) => (
+              <button key={item} type="button" className={`chip${format === item ? ' on' : ''}`} onClick={() => setFormat(item)}>
+                {item}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -202,81 +186,138 @@ export default function PlatformStep({ project, saving, error, returnNote, onBac
           </div>
         </div>
 
-        <label>Ad copy source</label>
-        <div className="chips">
-          <button type="button" className={`chip${copySource === 'ai' ? ' on' : ''}`} onClick={() => setCopySource('ai')}>
-            Let AI write the copy
-          </button>
-          <button type="button" className={`chip${copySource === 'manual' ? ' on' : ''}`} onClick={() => setCopySource('manual')}>
-            I&apos;ll write it myself
-          </button>
-        </div>
-        <p className="hint">
-          {copySource === 'ai'
-            ? 'Type what the ad should say, then write a preview. Generate ad stays off until you approve that copy.'
-            : 'Write your own headline and supporting line. A blank field is filled on the server.'}
-        </p>
-        {copySource === 'ai' && (
-          <>
-            <label htmlFor="copyPrompt">What should the copy say?</label>
-            <textarea
-              id="copyPrompt"
-              value={copyPrompt}
-              onChange={(e) => setCopyPrompt(e.target.value)}
-              placeholder="e.g. Get marketing leaders to book a 15-minute demo this week. Sound professional. Do not name competitors."
-            />
-            <div className="footer" style={{ justifyContent: 'flex-start' }}>
-              <button type="button" className="btn sm" disabled={writing || saving} onClick={() => void writeCopy()}>
-                {writing ? 'Writing…' : preview ? 'Write again' : 'Write the copy'}
-              </button>
-            </div>
-            {writeError && <div className="err" role="alert">{writeError}</div>}
-            {preview && (
-              <div className="copy-preview">
-                {preview.map((line, index) => (
-                  <article key={`${line.headline}-${index}`} className={approved ? 'on' : ''}>
-                    <strong>Version {String.fromCharCode(65 + index)}</strong>
-                    <p>{line.headline}</p>
-                    <p className="hint">{line.sub}</p>
-                    <p>{line.primary}</p>
-                  </article>
-                ))}
-              </div>
-            )}
-            {preview && (
-              <div className="footer" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
-                <button type="button" className="btn sm" disabled={writing || approved} onClick={() => setApproved(true)}>
-                  {approved ? 'Copy approved' : 'Use this copy'}
+        <div className="ad-copy-block">
+          <h4>Ad copy</h4>
+          <p className="hint">One brief by default. Write with AI, then refine the headline and supporting line.</p>
+
+          <label htmlFor="avoid">Avoid</label>
+          <textarea
+            id="avoid"
+            className="short"
+            value={avoid}
+            onChange={(e) => setAvoid(e.target.value)}
+            placeholder="e.g. no competitor names, no medical claims"
+          />
+
+          <div className="copy-field">
+            <label htmlFor="copyPrompt">What should the ad say?</label>
+            <div className="copy-field-shell">
+              <textarea
+                id="copyPrompt"
+                value={copyPrompt}
+                onChange={(e) => {
+                  setCopyPrompt(e.target.value);
+                  setCopySource('ai');
+                }}
+                placeholder="e.g. Get marketing leaders to book a 15-minute demo this week. Sound professional."
+              />
+              <div className="copy-field-actions">
+                <button type="button" className="btn sm" disabled={writing || saving || copyPrompt.trim().length < 2} onClick={() => void writeCopy()}>
+                  {writing ? 'Writing…' : preview ? 'Write with AI again' : 'Write with AI'}
                 </button>
               </div>
-            )}
-            {approved && <p className="hint">This copy is approved. Generate ad will use these lines and will not write new ones.</p>}
-          </>
-        )}
-        {copySource === 'manual' && (
-          <>
-            <label htmlFor="headline">Headline</label>
-            <input id="headline" type="text" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. Ship AI workflows in days" />
-            <label htmlFor="sub">Supporting line</label>
-            <input id="sub" type="text" value={subline} onChange={(e) => setSubline(e.target.value)} placeholder="e.g. No code. No bottlenecks." />
-          </>
-        )}
+            </div>
+          </div>
 
-        <label htmlFor="avoid">Anything to avoid</label>
-        <textarea id="avoid" className="short" value={avoid} onChange={(e) => setAvoid(e.target.value)} placeholder="e.g. no competitor names, no medical claims" />
+          {writeError && <div className="err" role="alert">{writeError}</div>}
+
+          {preview && (
+            <div className="copy-preview">
+              {preview.map((line, index) => (
+                <article key={`${line.headline}-${index}`} className={approved ? 'on' : ''}>
+                  <strong>Version {String.fromCharCode(65 + index)}</strong>
+                  <p>{line.headline}</p>
+                  <p className="hint">{line.sub}</p>
+                  <p>{line.primary}</p>
+                </article>
+              ))}
+            </div>
+          )}
+          {preview && !approved && (
+            <div className="footer" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
+              <button type="button" className="btn sm" disabled={writing} onClick={approveCopy}>
+                Use this copy
+              </button>
+            </div>
+          )}
+          {approved && <p className="hint">Copy approved. You can still edit the headline and supporting line below.</p>}
+
+          <div className="copy-lines">
+            <label htmlFor="headline">Headline</label>
+            <input
+              id="headline"
+              type="text"
+              value={headline}
+              onChange={(e) => {
+                setHeadline(e.target.value);
+                if (!preview) setCopySource('manual');
+              }}
+              placeholder="e.g. Ship AI workflows in days"
+            />
+            <label htmlFor="sub">Supporting line</label>
+            <input
+              id="sub"
+              type="text"
+              value={subline}
+              onChange={(e) => {
+                setSubline(e.target.value);
+                if (!preview) setCopySource('manual');
+              }}
+              placeholder="e.g. No code. No bottlenecks."
+            />
+          </div>
+        </div>
+
+        <div className="row model-row">
+          <div>
+            <label htmlFor="imageModel">Image model</label>
+            <select id="imageModel" value={imageModel} onChange={(e) => setImageModel(canonicalImageModel(e.target.value))}>
+              {IMAGE_MODELS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <p className="hint">{IMAGE_MODELS.find((item) => item.value === imageModel)?.hint}</p>
+          </div>
+          <div>
+            <label htmlFor="imageResolution">Resolution</label>
+            <select
+              id="imageResolution"
+              value={resolutionChoices.includes(imageResolution) ? imageResolution : (resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION)}
+              onChange={(e) => setImageResolution(canonicalImageResolution(e.target.value))}
+              disabled={resolutionChoices.length <= 1}
+            >
+              {(resolutionChoices.length > 1 ? IMAGE_RESOLUTIONS.filter((item) => resolutionChoices.includes(item.value)) : [{ value: '1K' as const, label: 'Fixed by model' }]).map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <p className="hint">Default is Nano Banana Pro at 4K. Change only when you need to.</p>
+          </div>
+        </div>
 
         {error && <div className="err" role="alert">{error}</div>}
-        <div className="footer">
+        <div className="footer platform-footer">
           <button type="button" className="btn ghost" onClick={onBack}>
             Back
           </button>
           <button
             type="button"
-            className="btn"
-            disabled={saving || writing || (copySource === 'ai' && !approved)}
-            onClick={() => onGenerate({ ...currentPayload(), approvedCopy: copySource === 'ai' && preview ? preview : undefined })}
+            className="btn platform-generate"
+            disabled={!canGenerate}
+            onClick={() => {
+              const payload = currentPayload();
+              const useAi = approved && preview;
+              onGenerate({
+                ...payload,
+                copySource: useAi ? 'ai' : 'manual',
+                approvedCopy: useAi ? preview : undefined,
+              });
+            }}
           >
-            {saving ? 'Generating…' : 'Generate ad'}
+            {saving ? 'Generating…' : 'Generate Ad'}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import HexColorField from '@/components/HexColorField';
 import {
   clearPopupOrigin,
   positionPatch,
@@ -25,67 +26,10 @@ interface GenerateStepProps {
   busy: boolean;
   thoughts: string;
   error: string | null;
-  onBack: (note?: string) => void;
   onPatch: (version: VersionDTO) => void;
-  onRefresh: (note?: string) => void;
   onAdd: (count: number) => void;
-  onRewrite: (id: string, note?: string) => void;
   onImage: (id: string, editPrompt: string) => void;
   onDelete: () => void;
-}
-
-type GuideKind = 'rewrite' | 'refresh' | 'back';
-
-function parseHex(value: string): string | null {
-  const match = /^#?([0-9a-fA-F]{6})$/.exec(value.trim());
-  return match ? `#${match[1].toLowerCase()}` : null;
-}
-
-function ColorField({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (hex: string) => void;
-}) {
-  const [hexDraft, setHexDraft] = useState(value);
-  useEffect(() => {
-    setHexDraft(value);
-  }, [value]);
-
-  return (
-    <div className="color-field">
-      <span className="color-field-label">{label}</span>
-      <input
-        id={id}
-        type="color"
-        value={parseHex(value) ?? '#000000'}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-      />
-      <input
-        type="text"
-        className="color-hex"
-        value={hexDraft}
-        spellCheck={false}
-        aria-label={`${label} hex`}
-        onChange={(e) => {
-          const next = e.target.value;
-          setHexDraft(next);
-          const parsed = parseHex(next);
-          if (parsed) onChange(parsed);
-        }}
-        onBlur={() => {
-          const parsed = parseHex(hexDraft);
-          setHexDraft(parsed ?? value);
-        }}
-      />
-    </div>
-  );
 }
 
 function letter(index: number): string {
@@ -124,7 +68,7 @@ function assetUrl(id: string): string {
   return `/api/assets/${encodeURIComponent(id)}`;
 }
 
-export default function GenerateStep({ project, generating, busy, thoughts, error, onBack, onPatch, onRefresh, onAdd, onRewrite, onImage, onDelete }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, thoughts, error, onPatch, onAdd, onImage, onDelete }: GenerateStepProps) {
   const [deleting, setDeleting] = useState(false);
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
@@ -141,8 +85,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [pendingExtra, setPendingExtra] = useState(0);
   /** Which on-ad text block is open in the left popup editor. */
   const [textEdit, setTextEdit] = useState<{ versionId: string; kind: TextKind } | null>(null);
-  const [guide, setGuide] = useState<GuideKind | null>(null);
-  const [guideText, setGuideText] = useState('');
   const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
@@ -360,48 +302,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     });
     if (settled) setRedrawIds([]);
   }, [busy, redrawIds, project.versions, loadedUrls]);
-
-  function requestRefresh(note?: string) {
-    const ids = project.versions.filter((version) => version.position < 2).map((version) => version.id);
-    for (const version of project.versions) {
-      if (isHttpsUrl(version.imageUrl) && ids.includes(version.id)) delete imageCache.current[version.imageUrl];
-    }
-    setRedrawIds(ids);
-    onRefresh(note);
-  }
-
-  function openGuide(kind: GuideKind) {
-    setGuide(kind);
-    setGuideText('');
-  }
-
-  function confirmGuide() {
-    const note = guideText.trim();
-    if (!guide || note === '') return;
-    if (guide === 'rewrite' && active) onRewrite(active.id, note);
-    else if (guide === 'refresh') requestRefresh(note);
-    else if (guide === 'back') onBack(note);
-    setGuide(null);
-    setGuideText('');
-  }
-
-  const guideCopy: Record<GuideKind, { title: string; hint: string; action: string }> = {
-    rewrite: {
-      title: 'Rewrite copy',
-      hint: 'What should the new headline and primary text emphasize on top of this ad?',
-      action: 'Rewrite with this note',
-    },
-    refresh: {
-      title: 'Regenerate images',
-      hint: 'What should look different in the new pictures? Keep the current copy unless you say otherwise.',
-      action: 'Regenerate with this note',
-    },
-    back: {
-      title: 'Change platform / brief',
-      hint: 'What do you want to change before regenerating? This note opens on the platform step.',
-      action: 'Continue with this note',
-    },
-  };
 
   function requestImage(id: string, editPrompt: string) {
     setRedrawIds([id]);
@@ -719,9 +619,9 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </select>
               <label>Colors</label>
               <div className="color-fields">
-                <ColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
-                <ColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
-                <ColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
+                <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
+                <HexColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
+                <HexColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
               </div>
               <label htmlFor="mSize">Size</label>
               <select id="mSize" value={active.size} onChange={(e) => patch({ size: e.target.value })}>
@@ -735,19 +635,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <button type="button" className="btn sm" disabled={busy || !imageReady(active)} onClick={() => download(active)}>
                   Download PNG
                 </button>
-                <button type="button" className="btn ghost sm" disabled={busy || !!guide} onClick={() => openGuide('rewrite')}>
-                  Rewrite copy
-                </button>
-                <button type="button" className="btn ghost sm" disabled={working || !!guide} onClick={() => openGuide('refresh')}>
-                  {working ? 'Working…' : 'Regenerate images'}
-                </button>
-                <button type="button" className="btn ghost sm" disabled={!!guide} onClick={() => openGuide('back')}>
-                  Change platform / brief
-                </button>
                 <button
                   type="button"
                   className="btn ghost sm gen-delete"
-                  disabled={busy || working || deleting || !!guide}
+                  disabled={busy || working || deleting}
                   onClick={() => {
                     if (!window.confirm('Delete this ad? This cannot be undone.')) return;
                     setDeleting(true);
@@ -757,28 +648,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   {deleting ? 'Deleting…' : 'Delete ad'}
                 </button>
               </div>
-
-              {guide && (
-                <div className="guide-panel" role="dialog" aria-label={guideCopy[guide].title}>
-                  <h4>{guideCopy[guide].title}</h4>
-                  <p className="hint">{guideCopy[guide].hint}</p>
-                  <textarea
-                    className="short"
-                    value={guideText}
-                    autoFocus
-                    placeholder="Be specific — this shapes the next result"
-                    onChange={(e) => setGuideText(e.target.value)}
-                  />
-                  <div className="guide-panel-actions">
-                    <button type="button" className="btn ghost sm" onClick={() => { setGuide(null); setGuideText(''); }}>
-                      Cancel
-                    </button>
-                    <button type="button" className="btn sm" disabled={guideText.trim() === '' || busy || working} onClick={confirmGuide}>
-                      {guideCopy[guide].action}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
