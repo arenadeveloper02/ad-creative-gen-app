@@ -49,6 +49,11 @@
   display: inline-flex; align-items: center; padding: 0 4px;
   color: var(--aurora-text3); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
 }
+.brand-name-row {
+  display: flex; gap: 8px; align-items: stretch;
+}
+.brand-name-row input { flex: 1; min-width: 0; margin: 0; }
+.brand-name-row .btn { white-space: nowrap; align-self: center; flex: none; }
 .preview-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 24px;
   align-items: start;

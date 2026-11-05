@@ -59,7 +59,7 @@ function fmtSize(bytes: number): string {
 }
 
 /** ai = type the company and everything fills itself; existing = a saved profile; manual = write it all by hand. */
-type BrandMode = 'ai' | 'existing' | 'manual';
+type BrandMode = 'existing' | 'manual';
 
 const VARIANT_RE = /^(Primary|Reverse \(white\)|Icon|Stacked|Mono|Alternate) - (.+)$/;
 
@@ -107,7 +107,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   const [goal, setGoal] = useState(project?.goal ?? 'Awareness');
   const [profileId, setProfileId] = useState(project?.profileId ?? '');
   const [brandMode, setBrandMode] = useState<BrandMode>(
-    project?.profileId && profiles.some((item) => item.id === project.profileId) ? 'existing' : 'ai',
+    project?.profileId && profiles.some((item) => item.id === project.profileId) ? 'existing' : 'manual',
   );
   const [brandName, setBrandName] = useState(project?.brandName ?? '');
   const [website, setWebsite] = useState('');
@@ -132,14 +132,12 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   /** Files the last AI fill added, so a new company replaces them instead of piling up. */
   const aiAssetIds = useRef<Set<string>>(new Set());
 
-  // The profile the project will point at: the picked one under Use existing, or the one AI just saved.
-  const linked = brandMode !== 'manual' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
-  // Saved profiles are only shown and editable under Use existing; AI mode never displays old profile files.
-  const selected = brandMode === 'existing' ? linked : null;
-  const isNew = brandMode !== 'existing';
-  const isAi = brandMode === 'ai';
+  // Saved profiles are only linked under Use existing.
+  const linked = brandMode === 'existing' ? (profiles.find((item) => item.id === profileId) ?? null) : null;
+  const selected = linked;
+  const isNew = brandMode === 'manual';
 
-  /** Everything typed or AI-filled in one tab, kept while the user looks at another tab. */
+  /** Unsaved Write manually state, kept while the user looks at Use existing. */
   interface ModeDraft {
     brandName: string;
     website: string;
@@ -155,7 +153,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     aiIds: string[];
     productTouched: boolean;
   }
-  const drafts = useRef<{ ai: ModeDraft | null; manual: ModeDraft | null; existingId: string }>({ ai: null, manual: null, existingId: '' });
+  const drafts = useRef<{ manual: ModeDraft | null; existingId: string }>({ manual: null, existingId: '' });
 
   function snapshotDraft(): ModeDraft {
     return {
@@ -175,10 +173,9 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     };
   }
 
-  /** Remembers the current tab's unsaved state before leaving it. */
+  /** Remembers Write manually before switching to Use existing. */
   function stashDraft() {
-    if (brandMode === 'ai') drafts.current.ai = snapshotDraft();
-    else if (brandMode === 'manual') drafts.current.manual = snapshotDraft();
+    if (brandMode === 'manual') drafts.current.manual = snapshotDraft();
     else drafts.current.existingId = profileId;
   }
 
@@ -198,21 +195,19 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     productTouched.current = draft.productTouched;
   }
 
-  function chooseNewProfile(mode: 'ai' | 'manual') {
-    if (mode === brandMode) return;
+  function chooseManual() {
+    if (brandMode === 'manual') return;
     stashDraft();
-    setBrandMode(mode);
+    setBrandMode('manual');
     setOverwrite(false);
     setStatusKind('');
-    const draft = mode === 'ai' ? drafts.current.ai : drafts.current.manual;
+    const draft = drafts.current.manual;
     if (draft) {
-      // Coming back: pick up exactly where this tab was left, saved or not.
       restoreDraft(draft);
-      setStatus(mode === 'ai' ? 'Your AI-filled brand is back as you left it.' : 'Your manual profile is back as you left it.');
+      setStatus('Your brand profile is back as you left it.');
       return;
     }
-    setStatus(mode === 'ai' ? 'Type the company name and leave the field — logo, colours, fonts and creatives fill in and the profile is saved for you.' : 'Fill the brand in yourself and upload your own files. Save the profile to reuse it.');
-    // A fresh tab starts empty: nothing from a previous company or saved profile carries over.
+    setStatus('Enter the brand name, then Fill with AI — or upload files yourself. Save the profile to reuse it.');
     setProfileId('__new__');
     setAssets([]);
     setRenderAssetIds([]);
@@ -227,7 +222,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
   function chooseExisting() {
     if (profiles.length === 0) {
-      setStatus('No saved profiles yet. Create a new one first.');
+      setStatus('No saved profiles yet. Write one manually first.');
       setStatusKind('err');
       return;
     }
@@ -236,7 +231,6 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setBrandMode('existing');
     setOverwrite(false);
     setStatus('');
-    // Prefer the profile last viewed under Use existing, then the one AI just saved, then the first.
     const wanted = profiles.find((item) => item.id === drafts.current.existingId) ?? profiles.find((item) => item.id === profileId) ?? profiles[0];
     applyProfile(wanted.id);
   }
@@ -332,7 +326,6 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const found = Array.isArray(data.assets) ? data.assets.filter((item) => item && typeof item.id === 'string') : [];
     // Replace the previous company's files only after the new ones arrived.
     const nextAssets = found;
-    const nextRender = defaultRenderIds(nextAssets);
     aiAssetIds.current = new Set(found.map((item) => item.id));
 
     const counts = data.counts ?? {};
@@ -345,52 +338,41 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const summary = typeof data.summary === 'string' && data.summary.trim() !== '' ? ` ${data.summary.trim()}` : '';
     const filled = bits.length ? ` Pulled ${bits.join(', ')} from the brand site — everything stays editable.` : ' No logo, fonts or creatives were reachable online — upload them below if you have them.';
 
-    // Save the profile while drafts are still paused (lookingUp), then show the new files.
-    if (brandMode === 'ai') {
-      const saved = await persistProfile({
-        name: profileName.trim() || nextBrand.trim(),
-        brandName: nextBrand,
-        product: nextProduct,
-        c1: nextC1,
-        c2: nextC2,
-        c3: nextC3,
-        assetIds: nextAssets.map((item) => item.id),
-        overwrite: true,
-        stayInAiMode: true,
-      });
-      if (ticket !== lookupAbort.current) {
-        // A newer Fill with AI owns lookingUp; do not clear it.
-        return;
-      }
-      setBrandName(nextBrand);
-      setProduct(nextProduct);
-      if (typeof data.website === 'string' && data.website.trim() !== '' && website.trim() === '') setWebsite(data.website);
-      setC1(nextC1);
-      setC2(nextC2);
-      setC3(nextC3);
-      setAssets(saved ? saved.assets : nextAssets);
-      setRenderAssetIds(defaultRenderIds(saved ? saved.assets : nextAssets));
-      setLookingUp(false);
-      if (saved) {
-        setStatus(`Brand filled with AI and saved as profile "${saved.name}".${filled}${fontNote}${summary}`);
-        setStatusKind('ok');
-        return;
-      }
-      setStatus(`Brand colours filled with AI.${filled}${fontNote}${summary}`);
-      setStatusKind('ok');
+    const nextWebsite = typeof data.website === 'string' && data.website.trim() !== '' ? data.website.trim() : website;
+    const nextProfileName = profileName.trim() || nextBrand.trim();
+
+    // Save while drafts are paused (lookingUp), then show the new files — stay on Write manually.
+    const saved = await persistProfile({
+      name: nextProfileName,
+      brandName: nextBrand,
+      product: nextProduct,
+      c1: nextC1,
+      c2: nextC2,
+      c3: nextC3,
+      assetIds: nextAssets.map((item) => item.id),
+      overwrite: true,
+      stayOnManual: true,
+    });
+    if (ticket !== lookupAbort.current) {
+      // A newer Fill with AI owns lookingUp; do not clear it.
       return;
     }
-
     setBrandName(nextBrand);
     setProduct(nextProduct);
-    if (typeof data.website === 'string' && data.website.trim() !== '' && website.trim() === '') setWebsite(data.website);
+    setWebsite(nextWebsite);
+    setProfileName(nextProfileName);
     setC1(nextC1);
     setC2(nextC2);
     setC3(nextC3);
-    setAssets(nextAssets);
-    setRenderAssetIds(nextRender);
+    setAssets(saved ? saved.assets : nextAssets);
+    setRenderAssetIds(defaultRenderIds(saved ? saved.assets : nextAssets));
     setLookingUp(false);
-    setStatus(`Brand colours filled with AI.${filled}${fontNote}${summary}`);
+    if (saved) {
+      setStatus(`Filled with AI and saved as "${saved.name}".${filled}${fontNote}${summary}`);
+      setStatusKind('ok');
+      return;
+    }
+    setStatus(`Brand filled with AI.${filled}${fontNote}${summary}`);
     setStatusKind('ok');
   }
 
@@ -498,6 +480,12 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
   }, [description, sceneNote, goal, brandName, product, profileId, c1, c2, c3, assets, renderAssetIds, lookingUp]);
 
   function payload(ids: string[]): BriefPayload {
+    const attachedProfile =
+      brandMode === 'existing'
+        ? linked
+        : profileId !== '' && profileId !== '__new__'
+          ? profiles.find((item) => item.id === profileId) ?? null
+          : null;
     return {
       description: description.trim(),
       sceneNote: sceneNote.trim(),
@@ -505,7 +493,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
       brandName: brandName.trim(),
       product: product.trim(),
       guidelineUrl: '',
-      profileId: linked ? linked.id : null,
+      profileId: attachedProfile?.id ?? null,
       c1,
       c2,
       c3,
@@ -524,7 +512,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     c3: string;
     assetIds: string[];
     overwrite: boolean;
-    stayInAiMode?: boolean;
+    stayOnManual?: boolean;
   }): Promise<ProfileDTO | null> {
     if (input.name === '') {
       setStatus('Enter a name for the profile.');
@@ -534,7 +522,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const res = await fetch('/api/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...input, stayInAiMode: undefined, guidelineUrl: '' }),
+      body: JSON.stringify({ ...input, stayOnManual: undefined, guidelineUrl: '' }),
     });
     const parsed = await readJson(res);
     if (!parsed.ok) {
@@ -546,7 +534,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const saved = parsed.data as ProfileDTO;
     const next = [...profiles.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name));
     onProfiles(next);
-    if (!input.stayInAiMode) setBrandMode('existing');
+    if (!input.stayOnManual) setBrandMode('existing');
     setProfileId(saved.id);
     setAssets(saved.assets);
     aiAssetIds.current = new Set(saved.assets.map((item) => item.id));
@@ -556,7 +544,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
   async function saveProfile() {
     const saved = await persistProfile({
-      name: profileName.trim() || (isAi ? brandName.trim() : ''),
+      name: profileName.trim() || brandName.trim(),
       brandName,
       product,
       c1,
@@ -612,9 +600,10 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     const rest = profiles.filter((item) => item.id !== selected.id);
     onProfiles(rest);
     if (rest.length === 0) {
-      setBrandMode('ai');
+      setBrandMode('manual');
       setProfileId('__new__');
       setAssets([]);
+      setRenderAssetIds([]);
     } else {
       applyProfile(rest[0].id);
     }
@@ -640,13 +629,13 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
         </select>
 
         <h4 style={{ marginTop: 22 }}>Brand profile, guidelines and assets</h4>
-        <p className="hint">Type the company name and AI fills the logo, colours, fonts and creatives and saves the profile. Or pick a saved profile, or write one by hand.</p>
+        <p className="hint">Write the brand yourself, or Fill with AI from the company name. Or pick a saved profile.</p>
 
         <div className="brand-panel">
           <label>Brand profile</label>
           <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
-            <button type="button" className={`chip${brandMode === 'ai' ? ' on' : ''}`} onClick={() => chooseNewProfile('ai')}>
-              Auto-fill with AI
+            <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
+              Write manually
             </button>
             <span className="brand-or" aria-hidden="true">OR</span>
             <button
@@ -657,13 +646,9 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
             >
               Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
             </button>
-            <span className="brand-or" aria-hidden="true">OR</span>
-            <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={() => chooseNewProfile('manual')}>
-              Write manually
-            </button>
           </div>
           {profiles.length === 0 && (
-            <p className="hint">No saved profiles yet. Auto-fill one with AI or write one manually — it will appear under Use existing.</p>
+            <p className="hint">No saved profiles yet. Write one manually or Fill with AI — it will appear under Use existing.</p>
           )}
 
           {brandMode === 'existing' && (
@@ -701,27 +686,25 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
           <div className="row">
             <div>
               <label htmlFor="brand">Brand / company name</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+              <div className="brand-name-row">
                 <input
                   id="brand"
                   type="text"
-                  style={{ flex: 1, minWidth: 0 }}
                   value={brandName}
                   onChange={(e) => setBrandName(e.target.value)}
-                  onBlur={() => {
-                    if (isAi && brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
-                  }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                    if (e.key === 'Enter' && isNew) {
+                      e.preventDefault();
+                      if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
+                    }
                   }}
                   placeholder="e.g. Gentle Dental"
                   disabled={lookingUp}
                 />
-                {isAi && (
+                {isNew && (
                   <button
                     type="button"
                     className="btn sm"
-                    style={{ whiteSpace: 'nowrap', alignSelf: 'center' }}
                     disabled={lookingUp || uploading || brandName.trim().length < 2}
                     onClick={() => void fillBrandWithAi(true)}
                   >
@@ -741,62 +724,42 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                   setProduct(e.target.value);
                 }}
                 placeholder="e.g. Arena AI workflow platform"
+                disabled={lookingUp}
               />
             </div>
           </div>
 
-          {isAi && (
-            <>
-              <div className="row" style={{ marginTop: 12 }}>
-                <div>
-                  <label htmlFor="website">Brand website (optional, helps the AI find the right company)</label>
-                  <input
-                    id="website"
-                    type="url"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    onBlur={() => {
-                      if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                    }}
-                    placeholder="e.g. https://gentledental.com"
-                    disabled={lookingUp}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="profileName">Profile name (optional, defaults to the brand)</label>
-                  <input
-                    id="profileName"
-                    type="text"
-                    value={profileName}
-                    onChange={(e) => {
-                      setProfileName(e.target.value);
-                      setOverwrite(false);
-                    }}
-                    placeholder={brandName.trim() || 'e.g. Gentle Dental – Q3'}
-                  />
-                </div>
-              </div>
-              {lookingUp && <p className="status-line">Finding the brand site and pulling logo, colours, fonts and creatives with AI…</p>}
-            </>
-          )}
-
-          {brandMode === 'manual' && (
-            <div style={{ marginTop: 12 }}>
-              <label htmlFor="profileName">New profile name</label>
+          <div className="row" style={{ marginTop: 12 }}>
+            <div>
+              <label htmlFor="website">Brand website (optional)</label>
+              <input
+                id="website"
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="e.g. https://gentledental.com"
+                disabled={lookingUp}
+              />
+            </div>
+            <div>
+              <label htmlFor="profileName">{isNew ? 'Profile name (optional)' : 'Profile name'}</label>
               <input
                 id="profileName"
                 type="text"
-                value={profileName}
+                value={isNew ? profileName : (selected?.name ?? '')}
                 onChange={(e) => {
+                  if (!isNew) return;
                   setProfileName(e.target.value);
                   setOverwrite(false);
                 }}
-                placeholder="e.g. Position2 – Arena"
+                placeholder={brandName.trim() || 'e.g. Gentle Dental – Q3'}
+                disabled={!isNew || lookingUp}
+                readOnly={!isNew}
               />
             </div>
+          </div>
+          {lookingUp && (
+            <p className="status-line">Finding the brand site and pulling website, logos, fonts, creatives and colours…</p>
           )}
 
           <div className="asset-grid">
