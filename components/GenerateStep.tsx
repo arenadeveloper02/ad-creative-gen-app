@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import HexColorField from '@/components/HexColorField';
 import {
   positionPatch,
@@ -535,6 +535,23 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 selected={textEdit?.versionId === active.id ? textEdit.kind : null}
                 logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
                 activeLogoId={activeLogoId}
+                onSelectLayer={(kind) => {
+                  const next: Partial<VersionDTO> = {};
+                  if (kind === 'headline') {
+                    next.showHeadline = true;
+                    if (!active.headline.trim()) next.headline = project.headline.trim() || 'Your headline';
+                  } else if (kind === 'sub') {
+                    next.showSub = true;
+                    if (!active.sub.trim()) next.sub = project.subline.trim() || 'Supporting line';
+                  } else if (kind === 'cta') {
+                    next.showCta = true;
+                    if (!active.cta.trim()) next.cta = project.cta.trim() || 'Learn more';
+                  } else {
+                    next.showLogo = true;
+                  }
+                  patch(next);
+                  setTextEdit({ versionId: active.id, kind });
+                }}
                 onText={(kind, value) => patch(textValuePatch(kind, value))}
                 onStyle={(kind, style) => patch(stylePatch(kind, style))}
                 onPickLogo={(id) => {
@@ -546,6 +563,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   if (kind === 'headline') patch({ showHeadline: show });
                   if (kind === 'sub') patch({ showSub: show });
                   if (kind === 'cta') patch({ showCta: show });
+                  if (kind === 'logo') patch({ showLogo: show });
                 }}
               />
               <details className="gen-meta-card gen-more">
@@ -764,11 +782,14 @@ function shown(version: VersionDTO, kind: TextKind): boolean {
   return version.showLogo !== false;
 }
 
+const LAYER_KINDS: TextKind[] = ['headline', 'sub', 'cta', 'logo'];
+
 function SideInspector({
   version,
   selected,
   logos,
   activeLogoId,
+  onSelectLayer,
   onText,
   onStyle,
   onPickLogo,
@@ -780,6 +801,7 @@ function SideInspector({
   selected: TextKind | null;
   logos: { id: string; name: string; url: string }[];
   activeLogoId: string | null;
+  onSelectLayer: (kind: TextKind) => void;
   onText: (kind: TextKind, value: string) => void;
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
   onPickLogo: (id: string) => void;
@@ -787,17 +809,41 @@ function SideInspector({
   onDone: () => void;
   onToggle: (kind: TextKind, show: boolean) => void;
 }) {
+  const layers = (
+    <div className="gen-layers">
+      <p className="text-edit-pop-title">On the ad</p>
+      <p className="hint">Turn a line back on, or open its settings.</p>
+      <div className="gen-layer-chips" role="toolbar" aria-label="Ad layers">
+        {LAYER_KINDS.map((kind) => {
+          const visible = shown(version, kind);
+          const active = selected === kind;
+          return (
+            <button
+              key={kind}
+              type="button"
+              className={`gen-layer-chip${active ? ' on' : ''}${visible ? '' : ' off'}`}
+              aria-pressed={active}
+              title={visible ? `Edit ${textKindLabel(kind)}` : `Add ${textKindLabel(kind)} back`}
+              onClick={() => onSelectLayer(kind)}
+            >
+              <span>{textKindLabel(kind)}</span>
+              <span className="gen-layer-chip-state">{visible ? 'On' : 'Add'}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  let body: ReactNode;
   if (!selected) {
-    return (
+    body = (
       <div className="gen-inspector-empty">
-        <p className="text-edit-pop-title">Settings</p>
-        <p className="hint">Click headline, subline, CTA, or the logo on the ad. Type settings stay in this panel.</p>
+        <p className="hint">Click a layer above, or click text / logo on the preview.</p>
       </div>
     );
-  }
-
-  if (selected === 'logo') {
-    return (
+  } else if (selected === 'logo') {
+    body = (
       <div className="gen-inspector" role="region" aria-label="Brand logos">
         <p className="text-edit-pop-title">Brand logos</p>
         {logos.length === 0 ? (
@@ -833,78 +879,84 @@ function SideInspector({
         </div>
       </div>
     );
+  } else {
+    const style = readTextStyle(version, selected);
+    const sizeLabel = Math.round(style.scale * 100);
+    const trackLabel = Math.round(style.track * 100);
+    const leadLabel = Math.round(style.lead * 100);
+    const visible = shown(version, selected);
+    body = (
+      <div className="gen-inspector" role="region" aria-label={`Edit ${textKindLabel(selected)}`}>
+        <p className="text-edit-pop-title">{textKindLabel(selected)}</p>
+        <textarea
+          className="text-edit-pop-input"
+          rows={selected === 'cta' ? 2 : 3}
+          value={readTextValue(version, selected)}
+          onChange={(e) => onText(selected, e.target.value)}
+          placeholder={selected === 'sub' ? 'Optional subline' : undefined}
+        />
+        <div className="text-toggle-row">
+          <button type="button" className="btn ghost sm" disabled={!visible} onClick={() => onToggle(selected, false)}>Hide</button>
+          <button type="button" className="btn ghost sm" disabled={visible} onClick={() => onSelectLayer(selected)}>Show</button>
+        </div>
+        <div className="text-edit-pop-section">
+          <span className="text-edit-pop-section-label">Weight &amp; style</span>
+          <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
+            <button
+              type="button"
+              className={`text-style-btn${style.bold ? ' on' : ''}`}
+              aria-pressed={style.bold}
+              title="Bold"
+              onClick={() => onStyle(selected, { bold: !style.bold })}
+            >
+              <strong>B</strong>
+            </button>
+            <button
+              type="button"
+              className={`text-style-btn italic${style.italic ? ' on' : ''}`}
+              aria-pressed={style.italic}
+              title="Italic"
+              onClick={() => onStyle(selected, { italic: !style.italic })}
+            >
+              I
+            </button>
+          </div>
+        </div>
+        <div className="text-edit-pop-row">
+          <span className="text-edit-pop-label">Size</span>
+          <div className="text-edit-pop-tools">
+            <button type="button" className="text-style-btn" title="Smaller" disabled={style.scale <= 0.7} onClick={() => onStyle(selected, { scale: Math.round((style.scale - 0.05) * 100) / 100 })}>−</button>
+            <span className="text-style-size" aria-live="polite">{sizeLabel}%</span>
+            <button type="button" className="text-style-btn" title="Larger" disabled={style.scale >= 1.6} onClick={() => onStyle(selected, { scale: Math.round((style.scale + 0.05) * 100) / 100 })}>+</button>
+          </div>
+        </div>
+        <div className="text-edit-pop-row">
+          <span className="text-edit-pop-label">Letter spacing</span>
+          <div className="text-edit-pop-tools">
+            <button type="button" className="text-style-btn" title="Tighter" disabled={style.track <= 0} onClick={() => onStyle(selected, { track: Math.round((style.track - 0.01) * 100) / 100 })}>−</button>
+            <span className="text-style-size" aria-live="polite">{trackLabel}</span>
+            <button type="button" className="text-style-btn" title="Looser" disabled={style.track >= 0.25} onClick={() => onStyle(selected, { track: Math.round((style.track + 0.01) * 100) / 100 })}>+</button>
+          </div>
+        </div>
+        <div className="text-edit-pop-row">
+          <span className="text-edit-pop-label">Line height</span>
+          <div className="text-edit-pop-tools">
+            <button type="button" className="text-style-btn" title="Tighter lines" disabled={style.lead <= 0.85} onClick={() => onStyle(selected, { lead: Math.round((style.lead - 0.05) * 100) / 100 })}>−</button>
+            <span className="text-style-size" aria-live="polite">{leadLabel}%</span>
+            <button type="button" className="text-style-btn" title="More line space" disabled={style.lead >= 1.6} onClick={() => onStyle(selected, { lead: Math.round((style.lead + 0.05) * 100) / 100 })}>+</button>
+          </div>
+        </div>
+        <div className="text-edit-pop-footer">
+          <button type="button" className="btn sm text-edit-pop-save" onClick={onDone}>Done</button>
+        </div>
+      </div>
+    );
   }
 
-  const style = readTextStyle(version, selected);
-  const sizeLabel = Math.round(style.scale * 100);
-  const trackLabel = Math.round(style.track * 100);
-  const leadLabel = Math.round(style.lead * 100);
-  const visible = shown(version, selected);
-
   return (
-    <div className="gen-inspector" role="region" aria-label={`Edit ${textKindLabel(selected)}`}>
-      <p className="text-edit-pop-title">{textKindLabel(selected)}</p>
-      <textarea
-        className="text-edit-pop-input"
-        rows={selected === 'cta' ? 2 : 3}
-        value={readTextValue(version, selected)}
-        onChange={(e) => onText(selected, e.target.value)}
-        placeholder={selected === 'sub' ? 'Optional subline' : undefined}
-      />
-      <div className="text-toggle-row">
-        <button type="button" className="btn ghost sm" disabled={!visible} onClick={() => onToggle(selected, false)}>Hide</button>
-        <button type="button" className="btn ghost sm" disabled={visible} onClick={() => onToggle(selected, true)}>Show</button>
-      </div>
-      <div className="text-edit-pop-section">
-        <span className="text-edit-pop-section-label">Weight &amp; style</span>
-        <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
-          <button
-            type="button"
-            className={`text-style-btn${style.bold ? ' on' : ''}`}
-            aria-pressed={style.bold}
-            title="Bold"
-            onClick={() => onStyle(selected, { bold: !style.bold })}
-          >
-            <strong>B</strong>
-          </button>
-          <button
-            type="button"
-            className={`text-style-btn italic${style.italic ? ' on' : ''}`}
-            aria-pressed={style.italic}
-            title="Italic"
-            onClick={() => onStyle(selected, { italic: !style.italic })}
-          >
-            I
-          </button>
-        </div>
-      </div>
-      <div className="text-edit-pop-row">
-        <span className="text-edit-pop-label">Size</span>
-        <div className="text-edit-pop-tools">
-          <button type="button" className="text-style-btn" title="Smaller" disabled={style.scale <= 0.7} onClick={() => onStyle(selected, { scale: Math.round((style.scale - 0.05) * 100) / 100 })}>−</button>
-          <span className="text-style-size" aria-live="polite">{sizeLabel}%</span>
-          <button type="button" className="text-style-btn" title="Larger" disabled={style.scale >= 1.6} onClick={() => onStyle(selected, { scale: Math.round((style.scale + 0.05) * 100) / 100 })}>+</button>
-        </div>
-      </div>
-      <div className="text-edit-pop-row">
-        <span className="text-edit-pop-label">Letter spacing</span>
-        <div className="text-edit-pop-tools">
-          <button type="button" className="text-style-btn" title="Tighter" disabled={style.track <= 0} onClick={() => onStyle(selected, { track: Math.round((style.track - 0.01) * 100) / 100 })}>−</button>
-          <span className="text-style-size" aria-live="polite">{trackLabel}</span>
-          <button type="button" className="text-style-btn" title="Looser" disabled={style.track >= 0.25} onClick={() => onStyle(selected, { track: Math.round((style.track + 0.01) * 100) / 100 })}>+</button>
-        </div>
-      </div>
-      <div className="text-edit-pop-row">
-        <span className="text-edit-pop-label">Line height</span>
-        <div className="text-edit-pop-tools">
-          <button type="button" className="text-style-btn" title="Tighter lines" disabled={style.lead <= 0.85} onClick={() => onStyle(selected, { lead: Math.round((style.lead - 0.05) * 100) / 100 })}>−</button>
-          <span className="text-style-size" aria-live="polite">{leadLabel}%</span>
-          <button type="button" className="text-style-btn" title="More line space" disabled={style.lead >= 1.6} onClick={() => onStyle(selected, { lead: Math.round((style.lead + 0.05) * 100) / 100 })}>+</button>
-        </div>
-      </div>
-      <div className="text-edit-pop-footer">
-        <button type="button" className="btn sm text-edit-pop-save" onClick={onDone}>Done</button>
-      </div>
+    <div className="gen-inspector-stack">
+      {layers}
+      {body}
     </div>
   );
 }

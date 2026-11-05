@@ -279,11 +279,36 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
   border: 1px solid var(--aurora-line2);
 }
 .gen-inspector { position: static; width: 100%; }
+.gen-inspector-stack { display: flex; flex-direction: column; gap: 10px; }
+.gen-layers {
+  padding: 12px 14px; border-radius: 16px;
+  border: 1px solid var(--aurora-line); background: var(--aurora-panel);
+}
+.gen-layers .hint { margin: 2px 0 10px; }
+.gen-layer-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.gen-layer-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 36px; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--aurora-line); background: var(--aurora-glass2);
+  color: var(--aurora-text); font: 600 12px/1.2 inherit; cursor: pointer;
+}
+.gen-layer-chip:hover { border-color: var(--aurora-line2); background: var(--aurora-glass3); }
+.gen-layer-chip.on {
+  border-color: transparent; color: #fff;
+  background: var(--aurora-grad-primary);
+  box-shadow: 0 8px 20px -8px rgba(var(--aurora-glow), 0.7);
+}
+.gen-layer-chip.off { border-style: dashed; color: var(--aurora-text2); }
+.gen-layer-chip-state {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; opacity: 0.72;
+}
+.gen-layer-chip.on .gen-layer-chip-state { opacity: 0.9; }
 .gen-inspector-empty {
-  padding: 14px; border-radius: 16px; border: 1px dashed var(--aurora-line);
+  padding: 12px 14px; border-radius: 16px; border: 1px dashed var(--aurora-line);
   background: var(--aurora-panel-2);
 }
-.gen-inspector-empty .hint { margin: 6px 0 0; }
+.gen-inspector-empty .hint { margin: 0; }
 .gen-more { margin-top: 10px; }
 .text-edit-pop {
   position: absolute; z-index: 6;
