@@ -49,11 +49,13 @@
   display: inline-flex; align-items: center; padding: 0 4px;
   color: var(--aurora-text3); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
 }
-.brand-name-row {
-  display: flex; gap: 8px; align-items: stretch;
+.brand-fill-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
-.brand-name-row input { flex: 1; min-width: 0; margin: 0; }
-.brand-name-row .btn { white-space: nowrap; align-self: center; flex: none; }
+.brand-fill-row .btn { white-space: nowrap; }
+.brand-save-row { margin-top: 10px; justify-content: flex-start; }
 
 .platform-pair {
   margin: 8px 0 4px; padding: 14px 16px; border-radius: 16px;

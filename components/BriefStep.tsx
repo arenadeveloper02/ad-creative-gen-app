@@ -693,32 +693,20 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
               <div className="row">
                 <div>
                   <label htmlFor="brand">Brand / company name</label>
-                  <div className="brand-name-row">
-                    <input
-                      id="brand"
-                      type="text"
-                      value={brandName}
-                      onChange={(e) => setBrandName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && isNew) {
-                          e.preventDefault();
-                          if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
-                        }
-                      }}
-                      placeholder="e.g. Gentle Dental"
-                      disabled={lookingUp}
-                    />
-                    {isNew && (
-                      <button
-                        type="button"
-                        className="btn sm"
-                        disabled={lookingUp || uploading || brandName.trim().length < 2}
-                        onClick={() => void fillBrandWithAi(true)}
-                      >
-                        {lookingUp ? 'Filling…' : 'Fill with AI'}
-                      </button>
-                    )}
-                  </div>
+                  <input
+                    id="brand"
+                    type="text"
+                    value={brandName}
+                    onChange={(e) => setBrandName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && isNew) {
+                        e.preventDefault();
+                        if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
+                      }
+                    }}
+                    placeholder="e.g. Gentle Dental"
+                    disabled={lookingUp}
+                  />
                 </div>
                 <div>
                   <label htmlFor="product">Product or service</label>
@@ -735,6 +723,19 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                   />
                 </div>
               </div>
+
+              {isNew && (
+                <div className="brand-fill-row">
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={lookingUp || uploading || brandName.trim().length < 2}
+                    onClick={() => void fillBrandWithAi(true)}
+                  >
+                    {lookingUp ? 'Filling…' : 'Fill with AI'}
+                  </button>
+                </div>
+              )}
 
               <div className="row">
                 <div>
@@ -770,7 +771,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
               )}
 
               {isNew && (
-                <div className="footer" style={{ marginTop: 8 }}>
+                <div className="footer brand-save-row">
                   <button type="button" className="btn sm" onClick={() => void saveProfile()}>
                     {overwrite ? 'Overwrite' : 'Save profile'}
                   </button>
