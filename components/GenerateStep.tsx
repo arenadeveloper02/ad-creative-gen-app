@@ -439,7 +439,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <div className="gen-rail-more">
                   <button
                     type="button"
-                    className="btn ghost sm gen-add-version"
+                    className="btn sm gen-add-version"
                     title={room === 0 ? `Already at ${MAX_VERSIONS} versions` : 'Add one more version'}
                     disabled={busy || appendBusy || room === 0}
                     onClick={() => requestAddOne()}
