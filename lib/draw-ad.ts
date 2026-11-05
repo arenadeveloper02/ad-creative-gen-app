@@ -3,10 +3,12 @@ import { fitInside, logoSlot, type ZoneRect } from '@/lib/ad-zones';
 import type { Layout } from '@/lib/platforms';
 import type { VersionDTO } from '@/lib/types';
 
-function typeFace(bold: boolean, italic: boolean, sizePx: number): string {
+function typeFace(bold: boolean, italic: boolean, sizePx: number, family?: string | null): string {
   const style = italic ? 'italic' : 'normal';
   const weight = bold ? '700' : '400';
-  return `${style} ${weight} ${Math.max(8, Math.round(sizePx))}px Arial`;
+  const safe = family?.replace(/["']/g, '').trim();
+  const face = safe ? `"${safe}", Arial, sans-serif` : 'Arial, sans-serif';
+  return `${style} ${weight} ${Math.max(8, Math.round(sizePx))}px ${face}`;
 }
 
 function applyTrack(ctx: CanvasRenderingContext2D, trackEm: number, sizePx: number): void {
@@ -21,6 +23,8 @@ function applyTrack(ctx: CanvasRenderingContext2D, trackEm: number, sizePx: numb
 export interface DrawAdOptions {
   /** Brand mark composited on the canvas so its bounds are known and text can clear it. */
   logo?: HTMLImageElement | null;
+  /** Loaded Brief font family name for on-ad type. */
+  fontFamily?: string | null;
 }
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
@@ -52,11 +56,26 @@ function rgba(hex: string, alpha: number, fallback: [number, number, number] = [
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function coverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number): void {
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+function coverImage(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  zoom = 1,
+  focusX = 0.5,
+  focusY = 0.5,
+): void {
+  const z = Math.min(2, Math.max(1, zoom || 1));
+  const fx = Math.min(1, Math.max(0, focusX));
+  const fy = Math.min(1, Math.max(0, focusY));
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * z;
   const dw = image.naturalWidth * scale;
   const dh = image.naturalHeight * scale;
-  ctx.drawImage(image, (width - dw) / 2, (height - dh) / 2, dw, dh);
+  let dx = width / 2 - fx * dw;
+  let dy = height / 2 - fy * dh;
+  dx = Math.min(0, Math.max(width - dw, dx));
+  dy = Math.min(0, Math.max(height - dh, dy));
+  ctx.drawImage(image, dx, dy, dw, dh);
 }
 
 function widest(ctx: CanvasRenderingContext2D, lines: string[]): number {
@@ -188,10 +207,14 @@ export function drawAd(
   const layout = version.layout as Layout;
   const { c1, c2, c3 } = version;
   const logo = logoReady(options?.logo) ? options.logo : null;
+  const fontFamily = options?.fontFamily?.trim() || null;
+  const imageZoom = typeof version.imageZoom === 'number' && Number.isFinite(version.imageZoom) ? version.imageZoom : 1;
+  const focusX = version.imageFocusX != null ? version.imageFocusX : 0.5;
+  const focusY = version.imageFocusY != null ? version.imageFocusY : 0.5;
 
   // Backdrop.
   if (hasImage) {
-    coverImage(ctx, image, width, height);
+    coverImage(ctx, image, width, height, imageZoom, focusX, focusY);
     if (bg === 'gradient') {
       const tint = layout === 'bottom'
         ? ctx.createLinearGradient(0, height * 0.3, 0, height)
@@ -289,19 +312,19 @@ export function drawAd(
     ? Math.min(maxW, Math.max(width * 0.4, logoBox.x - pad - Math.round(width * 0.03)))
     : maxW;
 
-  ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize);
+  ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, fontFamily);
   applyTrack(ctx, headStyle.track, hSize);
   const hLines = showHeadline ? wrap(ctx, version.headline.trim(), textMaxW).slice(0, 4) : [];
   const hW = Math.min(textMaxW, widest(ctx, hLines));
   const hH = hLines.length * hLead;
 
-  ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize);
+  ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, fontFamily);
   applyTrack(ctx, subStyle.track, sSize);
   const sLines = showSub ? wrap(ctx, version.sub.trim(), textMaxW).slice(0, 3) : [];
   const sW = Math.min(textMaxW, widest(ctx, sLines));
   const sH = sLines.length * sLead;
 
-  ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize);
+  ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize, fontFamily);
   applyTrack(ctx, ctaStyle.track, cSize);
   const ctaText = version.cta.trim();
   const ctaW = showCta ? Math.min(textMaxW, ctx.measureText(ctaText).width + width * 0.09 * ctaStyle.scale) : 0;
@@ -417,7 +440,7 @@ export function drawAd(
   }
 
   if (headSpot) {
-    ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize);
+    ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, fontFamily);
     applyTrack(ctx, headStyle.track, hSize);
     ctx.fillStyle = ink;
     ctx.textAlign = 'left';
@@ -432,7 +455,7 @@ export function drawAd(
   }
 
   if (subSpot) {
-    ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize);
+    ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, fontFamily);
     applyTrack(ctx, subStyle.track, sSize);
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.92;
@@ -448,7 +471,7 @@ export function drawAd(
   }
 
   if (ctaSpot) {
-    ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize);
+    ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize, fontFamily);
     applyTrack(ctx, ctaStyle.track, cSize);
     ctx.fillStyle = ctaFill;
     ctx.beginPath();

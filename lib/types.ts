@@ -52,6 +52,10 @@ export interface VersionDTO {
   logoX: number | null;
   logoY: number | null;
   logoAssetId: string | null;
+  fontAssetId: string | null;
+  imageZoom: number;
+  imageFocusX: number | null;
+  imageFocusY: number | null;
   showLogo: boolean;
   showHeadline: boolean;
   showSub: boolean;

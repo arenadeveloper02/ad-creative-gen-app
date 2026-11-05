@@ -124,6 +124,13 @@ model AdVersion {
   logoY        Float?
   // Which brand logo to overlay on this version. Null = Brief "On ad" pick. showLogo false hides it.
   logoAssetId  String?
+  // Brief font file for on-ad type. Null = default Arial (or first Brief "On ad" font in the editor).
+  fontAssetId  String?
+  // Photo crop: 1 = cover, higher = tighter crop around the focus point.
+  imageZoom    Float    @default(1)
+  // Normalized 0–1 focus point for the photo crop. Null = center.
+  imageFocusX  Float?
+  imageFocusY  Float?
   showLogo     Boolean  @default(true)
   showHeadline Boolean  @default(true)
   showSub      Boolean  @default(true)

@@ -15,9 +15,39 @@ import {
 } from '@/lib/ad-layout';
 import { drawAd } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
-import { SIZES } from '@/lib/platforms';
-import type { ProjectDTO, VersionDTO } from '@/lib/types';
+import { BACKGROUNDS, SIZES, type Background } from '@/lib/platforms';
+import type { AssetDTO, ProjectDTO, VersionDTO } from '@/lib/types';
 import { zipStored } from '@/lib/zip-store';
+
+const CROP_PRESETS = [
+  { id: 'fit', label: 'Fit', zoom: 1 },
+  { id: 'medium', label: 'Medium', zoom: 1.25 },
+  { id: 'close', label: 'Close', zoom: 1.5 },
+  { id: 'tight', label: 'Tight', zoom: 1.75 },
+] as const;
+
+const FOCUS_PRESETS = [
+  { id: 'center', label: 'Center', x: 0.5, y: 0.5 },
+  { id: 'top', label: 'Top', x: 0.5, y: 0.28 },
+  { id: 'bottom', label: 'Bottom', x: 0.5, y: 0.72 },
+  { id: 'left', label: 'Left', x: 0.28, y: 0.5 },
+  { id: 'right', label: 'Right', x: 0.72, y: 0.5 },
+] as const;
+
+const BG_LABELS: Record<Background, string> = {
+  photo: 'Photo',
+  gradient: 'Brand tint',
+  solid: 'Solid',
+  light: 'Light',
+};
+
+function fontFamilyName(id: string): string {
+  return `ad-font-${id}`;
+}
+
+function near(a: number, b: number, eps = 0.03): boolean {
+  return Math.abs(a - b) <= eps;
+}
 
 interface GenerateStepProps {
   project: ProjectDTO;
@@ -43,6 +73,26 @@ const LOGO_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'
 
 function brandLogos(project: ProjectDTO) {
   return project.assets.filter((item) => item.kind === 'logos' && LOGO_MIMES.has(item.mimeType));
+}
+
+function brandFonts(project: ProjectDTO): AssetDTO[] {
+  return project.assets.filter((item) => item.kind === 'fonts');
+}
+
+/** Brief "On ad" font, or the first uploaded font. */
+function defaultFontId(project: ProjectDTO): string | null {
+  const fonts = brandFonts(project);
+  if (fonts.length === 0) return null;
+  const picked = new Set(project.renderAssetIds);
+  const chosen = (picked.size ? fonts.filter((item) => picked.has(item.id)) : fonts)[0] ?? fonts[0];
+  return chosen?.id ?? null;
+}
+
+function resolveFontId(project: ProjectDTO, version: VersionDTO): string | null {
+  const fonts = brandFonts(project);
+  if (fonts.length === 0) return null;
+  if (version.fontAssetId && fonts.some((item) => item.id === version.fontAssetId)) return version.fontAssetId;
+  return defaultFontId(project);
 }
 
 /** Brief "On ad" pick, or the first brand logo if nothing was ticked. */
@@ -79,6 +129,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const logoCache = useRef<Record<string, HTMLImageElement>>({});
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [logoReadyIds, setLogoReadyIds] = useState<Record<string, boolean>>({});
+  const [fontReadyIds, setFontReadyIds] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [zipNote, setZipNote] = useState<string | null>(null);
   const [holdPanel, setHoldPanel] = useState(false);
@@ -92,7 +143,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
   const thoughtText = [thoughts, localThoughts].filter(Boolean).join('\n\n');
   const logos = brandLogos(project);
+  const fonts = brandFonts(project);
   const activeLogoId = active ? resolveLogoId(project, active) : null;
+  const activeFontId = active ? resolveFontId(project, active) : null;
+  const activeFontFamily = activeFontId && fontReadyIds[activeFontId] === true ? fontFamilyName(activeFontId) : null;
 
   useEffect(() => {
     if (!project.versions.some((item) => item.id === activeId)) {
@@ -137,6 +191,30 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
       cancelled = true;
     };
   }, [logoIdsKey]);
+
+  // Brief fonts for on-ad type — load once, then paint with the CSS family name.
+  const fontIdsKey = fonts.map((item) => item.id).join(',');
+  useEffect(() => {
+    let cancelled = false;
+    for (const font of fonts) {
+      if (fontReadyIds[font.id] === true) continue;
+      const family = fontFamilyName(font.id);
+      const face = new FontFace(family, `url(${JSON.stringify(assetUrl(font.id))})`);
+      void face.load().then((loaded) => {
+        if (cancelled) return;
+        document.fonts.add(loaded);
+        setFontReadyIds((current) => ({ ...current, [font.id]: true }));
+      }).catch(() => {
+        if (cancelled) return;
+        setFontReadyIds((current) => ({ ...current, [font.id]: false }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // fontReadyIds intentionally omitted — only reload when the Brief font set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontIdsKey]);
 
   function logoImageFor(version: VersionDTO): HTMLImageElement | null {
     const id = resolveLogoId(project, version);
@@ -408,6 +486,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           brand={project.brandName}
                           image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
                           logo={logoImageFor(version)}
+                          fontFamily={(() => {
+                            const id = resolveFontId(project, version);
+                            return id && fontReadyIds[id] === true ? fontFamilyName(id) : null;
+                          })()}
                           active={version.id === active.id}
                           editingKind={null}
                           onCanvas={(node) => {
@@ -471,6 +553,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     brand={project.brandName}
                     image={isHttpsUrl(active.imageUrl) && loadedUrls[active.imageUrl] ? imageCache.current[active.imageUrl] : null}
                     logo={logoImageFor(active)}
+                    fontFamily={activeFontFamily}
                     active
                     editingKind={textEdit?.versionId === active.id ? textEdit.kind : null}
                     onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
@@ -492,6 +575,62 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     : `${imageState(active)}. Drag text or the logo to move it. Type settings open on the right.`}
                 </p>
                 <div className="gen-image-edit">
+                  <p className="text-edit-pop-title">Image tools</p>
+                  <p className="hint">Quick crop, focus, and background — live on the preview. Prompt below still redraws with AI.</p>
+                  <span className="text-edit-pop-label">Crop</span>
+                  <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
+                    {CROP_PRESETS.map((item) => {
+                      const zoom = active.imageZoom ?? 1;
+                      const on = near(zoom, item.zoom, 0.05);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`gen-tool-chip${on ? ' on' : ''}`}
+                          aria-pressed={on}
+                          onClick={() => patch({ imageZoom: item.zoom })}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-edit-pop-label">Focus</span>
+                  <div className="gen-tool-chips" role="toolbar" aria-label="Focus">
+                    {FOCUS_PRESETS.map((item) => {
+                      const fx = active.imageFocusX ?? 0.5;
+                      const fy = active.imageFocusY ?? 0.5;
+                      const on = near(fx, item.x) && near(fy, item.y);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`gen-tool-chip${on ? ' on' : ''}`}
+                          aria-pressed={on}
+                          onClick={() => patch({ imageFocusX: item.x, imageFocusY: item.y })}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-edit-pop-label">Background</span>
+                  <div className="gen-tool-chips" role="toolbar" aria-label="Background">
+                    {BACKGROUNDS.map((item) => {
+                      const on = active.bg === item;
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          className={`gen-tool-chip${on ? ' on' : ''}`}
+                          aria-pressed={on}
+                          onClick={() => patch({ bg: item })}
+                        >
+                          {BG_LABELS[item]}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <label htmlFor={`edit-${active.id}`}>Update this image</label>
                   <textarea
                     id={`edit-${active.id}`}
@@ -538,7 +677,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 version={active}
                 selected={textEdit?.versionId === active.id ? textEdit.kind : null}
                 logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
+                fonts={fonts.map((item) => ({ id: item.id, name: item.name, ready: fontReadyIds[item.id] === true }))}
                 activeLogoId={activeLogoId}
+                activeFontId={activeFontId}
+                onPickFont={(id) => patch({ fontAssetId: id })}
                 onSelectLayer={(kind) => {
                   const next: Partial<VersionDTO> = {};
                   if (kind === 'headline') {
@@ -680,6 +822,7 @@ function AdStage({
   brand,
   image,
   logo,
+  fontFamily = null,
   active,
   editingKind,
   compact = false,
@@ -691,6 +834,7 @@ function AdStage({
   brand: string;
   image: HTMLImageElement | null | undefined;
   logo: HTMLImageElement | null;
+  fontFamily?: string | null;
   active: boolean;
   editingKind: TextKind | null;
   compact?: boolean;
@@ -712,7 +856,7 @@ function AdStage({
     const painted = dragLive
       ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, cw || 1, ch || 1) }
       : version;
-    setBoxes(drawAd(canvas, painted, brand, image, { logo }));
+    setBoxes(drawAd(canvas, painted, brand, image, { logo, fontFamily }));
     const host = frameRef.current;
     if (!host) return;
     const sync = () => {
@@ -723,7 +867,7 @@ function AdStage({
     const ro = new ResizeObserver(sync);
     ro.observe(host);
     return () => ro.disconnect();
-  }, [version, brand, image, logo, dragLive]);
+  }, [version, brand, image, logo, fontFamily, dragLive]);
 
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
@@ -840,7 +984,10 @@ function SideInspector({
   version,
   selected,
   logos,
+  fonts,
   activeLogoId,
+  activeFontId,
+  onPickFont,
   onSelectLayer,
   onText,
   onStyle,
@@ -852,7 +999,10 @@ function SideInspector({
   version: VersionDTO;
   selected: TextKind | null;
   logos: { id: string; name: string; url: string }[];
+  fonts: { id: string; name: string; ready: boolean }[];
   activeLogoId: string | null;
+  activeFontId: string | null;
+  onPickFont: (id: string) => void;
   onSelectLayer: (kind: TextKind) => void;
   onText: (kind: TextKind, value: string) => void;
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
@@ -884,6 +1034,32 @@ function SideInspector({
           );
         })}
       </div>
+      {fonts.length > 0 && (
+        <div className="gen-font-picker">
+          <span className="text-edit-pop-label">Brand font</span>
+          <p className="hint">From Brief — change it here for this ad.</p>
+          <div className="gen-tool-chips" role="listbox" aria-label="Brand fonts">
+            {fonts.map((item) => {
+              const on = activeFontId === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  className={`gen-tool-chip gen-font-chip${on ? ' on' : ''}`}
+                  disabled={!item.ready}
+                  title={item.ready ? item.name : `Loading ${item.name}`}
+                  style={item.ready ? { fontFamily: `"${fontFamilyName(item.id)}", Arial, sans-serif` } : undefined}
+                  onClick={() => onPickFont(item.id)}
+                >
+                  {item.name.replace(/^Primary - /i, '').slice(0, 22) || 'Font'}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 

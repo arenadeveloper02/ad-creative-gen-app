@@ -179,6 +179,10 @@ export interface VersionPatch {
   logoX?: number | null;
   logoY?: number | null;
   logoAssetId?: string | null;
+  fontAssetId?: string | null;
+  imageZoom?: number;
+  imageFocusX?: number | null;
+  imageFocusY?: number | null;
   showLogo?: boolean;
   showHeadline?: boolean;
   showSub?: boolean;
@@ -260,6 +264,15 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (ly !== undefined) patch.logoY = ly;
   if (body.logoAssetId === null) patch.logoAssetId = null;
   else if (typeof body.logoAssetId === 'string' && isId(body.logoAssetId)) patch.logoAssetId = body.logoAssetId;
+  if (body.fontAssetId === null) patch.fontAssetId = null;
+  else if (typeof body.fontAssetId === 'string' && isId(body.fontAssetId)) patch.fontAssetId = body.fontAssetId;
+  if (typeof body.imageZoom === 'number' && Number.isFinite(body.imageZoom)) {
+    patch.imageZoom = Math.min(2, Math.max(1, Math.round(body.imageZoom * 100) / 100));
+  }
+  const fx = cleanCoord(body.imageFocusX);
+  const fy = cleanCoord(body.imageFocusY);
+  if (fx !== undefined) patch.imageFocusX = fx;
+  if (fy !== undefined) patch.imageFocusY = fy;
   if (typeof body.showLogo === 'boolean') patch.showLogo = body.showLogo;
   if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
   if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;
