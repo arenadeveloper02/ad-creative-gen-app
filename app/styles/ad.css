@@ -241,10 +241,34 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--aurora-text3);
 }
 .gen-actions .btn { width: 100%; justify-content: center; }
-.gen-actions .gen-delete {
-  margin-top: 4px; color: var(--aurora-bad-text);
-  border-color: color-mix(in srgb, var(--aurora-bad-text) 28%, var(--aurora-line));
+.gen-danger-zone {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 18px; padding: 14px; border-radius: 16px;
+  border: 1px solid var(--aurora-bad-line);
+  background: color-mix(in srgb, var(--aurora-bad-bg) 70%, var(--aurora-panel));
 }
+.gen-danger-zone .hint { margin: 0 0 4px; color: var(--aurora-bad-text); }
+.gen-danger-zone .gen-actions-label { color: var(--aurora-bad-text); }
+.gen-delete {
+  width: 100%; justify-content: center;
+  min-height: 48px; padding: 14px 22px; font-size: 14px; font-weight: 700;
+}
+.gen-delete-modal {
+  position: fixed; inset: 0; z-index: 40;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(21, 19, 43, 0.45); backdrop-filter: blur(4px);
+}
+.gen-delete-dialog {
+  width: min(420px, 100%); padding: 18px 18px 16px; border-radius: 18px;
+  background: var(--aurora-panel); border: 1px solid var(--aurora-bad-line);
+  box-shadow: 0 24px 60px -28px rgba(21, 19, 43, 0.55);
+}
+.gen-delete-dialog h4 { margin: 0 0 6px; font-size: 17px; }
+.gen-delete-dialog .hint { margin: 0 0 12px; }
+.gen-delete-dialog-actions {
+  display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 14px;
+}
+.gen-delete-dialog-actions .gen-delete { width: auto; min-width: 168px; }
 .guide-panel {
   margin-top: 14px; padding: 14px; border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--aurora-c1) 35%, var(--aurora-line));

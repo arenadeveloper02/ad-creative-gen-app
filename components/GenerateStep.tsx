@@ -69,6 +69,10 @@ function assetUrl(id: string): string {
 
 export default function GenerateStep({ project, generating, busy, thoughts, error, onPatch, onAdd, onImage, onDelete }: GenerateStepProps) {
   const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteTyped, setDeleteTyped] = useState('');
+  const deletePhrase = 'Delete the Project';
+  const canConfirmDelete = deleteTyped.trim() === deletePhrase;
   const [activeId, setActiveId] = useState(project.versions[0]?.id ?? '');
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
@@ -602,23 +606,71 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <button type="button" className="btn sm" disabled={busy || !imageReady(active)} onClick={() => download(active)}>
                   Download PNG
                 </button>
+              </div>
+
+              <div className="gen-danger-zone">
+                <p className="gen-actions-label">Danger zone</p>
+                <p className="hint">Removes this entire ad project — every version, not just the selected preview.</p>
                 <button
                   type="button"
-                  className="btn ghost sm gen-delete"
+                  className="btn danger gen-delete"
                   disabled={busy || working || deleting}
                   onClick={() => {
-                    if (!window.confirm('Delete this ad? This cannot be undone.')) return;
-                    setDeleting(true);
-                    onDelete();
+                    setDeleteTyped('');
+                    setDeleteOpen(true);
                   }}
                 >
-                  {deleting ? 'Deleting…' : 'Delete ad'}
+                  {deleting ? 'Deleting…' : 'Delete this project'}
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {deleteOpen && (
+        <div className="gen-delete-modal" role="presentation" onClick={() => { if (!deleting) setDeleteOpen(false); }}>
+          <div
+            className="gen-delete-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h4 id="delete-project-title">Delete this project?</h4>
+            <p className="hint">
+              This permanently deletes the whole ad — all versions, copy, and images. Type <strong>{deletePhrase}</strong> to confirm.
+            </p>
+            <label htmlFor="deleteConfirm">Confirmation</label>
+            <input
+              id="deleteConfirm"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={deleteTyped}
+              placeholder={deletePhrase}
+              disabled={deleting}
+              onChange={(e) => setDeleteTyped(e.target.value)}
+            />
+            <div className="gen-delete-dialog-actions">
+              <button type="button" className="btn ghost" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn danger gen-delete"
+                disabled={deleting || !canConfirmDelete}
+                onClick={() => {
+                  setDeleting(true);
+                  onDelete();
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Delete the Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
