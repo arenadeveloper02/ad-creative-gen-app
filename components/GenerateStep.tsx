@@ -77,7 +77,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [loadedUrls, setLoadedUrls] = useState<Record<string, boolean>>({});
   const [logoReadyIds, setLogoReadyIds] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [moreText, setMoreText] = useState('1');
   const [zipNote, setZipNote] = useState<string | null>(null);
   const [holdPanel, setHoldPanel] = useState(false);
   const [localThoughts, setLocalThoughts] = useState('');
@@ -275,18 +274,12 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     if (files.length < project.versions.length) setZipNote(`Packaged ${files.length} of ${project.versions.length} versions.`);
   }
 
-  function typedCount(): number | null {
-    if (!/^\d+$/.test(moreText)) return null;
-    const next = Number(moreText);
-    if (next < 1 || next > room) return null;
-    return next;
-  }
-
-  function requestAdd(count: number) {
+  function requestAddOne() {
+    if (room < 1) return;
     appendFromRef.current = project.versions.length;
-    setPendingExtra(count);
+    setPendingExtra(1);
     setAppendBusy(true);
-    onAdd(count);
+    onAdd(1);
   }
 
   // Which cards are being redrawn right now: new extras, both A and B on a redraw, or one card on an edit.
@@ -444,32 +437,26 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   })}
                 </div>
                 <div className="gen-rail-more">
-                  <label htmlFor="moreCount" className="sr-only">Add more versions</label>
-                  <input
-                    id="moreCount"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="+"
-                    title={room === 0 ? `Already at ${MAX_VERSIONS} versions` : `Add 1–${room} more`}
-                    value={moreText}
+                  <button
+                    type="button"
+                    className="btn ghost sm gen-add-version"
+                    title={room === 0 ? `Already at ${MAX_VERSIONS} versions` : 'Add one more version'}
                     disabled={busy || appendBusy || room === 0}
-                    onChange={(e) => setMoreText(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                  />
-                  <button type="button" className="btn ghost sm" disabled={busy || appendBusy || typedCount() === null} onClick={() => { const count = typedCount(); if (count) requestAdd(count); }}>
-                    {appendBusy ? '…' : typedCount() === null ? 'Add' : `+${typedCount()}`}
+                    onClick={() => requestAddOne()}
+                  >
+                    {appendBusy ? 'Adding…' : room === 0 ? 'Full' : 'Add version'}
                   </button>
                 </div>
               </div>
               {appendBusy && (
                 <p className="hint creating-live">
-                  Adding versions in the strip above — selected ad stays as it is.
+                  Adding one version in the strip above — selected ad stays as it is.
                 </p>
               )}
               <p className="hint gen-rail-hint">
                 {room === 0
                   ? `You already have ${MAX_VERSIONS} versions.`
-                  : 'Pick a miniature above, then edit the large preview. Add more versions from the + control.'}
+                  : 'Pick a miniature above, then edit the large preview. Use Add version for one more at a time.'}
               </p>
 
               <div className="gen-focus-card">

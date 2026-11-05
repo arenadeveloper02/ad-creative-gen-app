@@ -145,15 +145,14 @@
   border-radius: 8px; background: var(--aurora-inset);
 }
 .gen-rail-more {
-  flex: none; display: flex; flex-direction: column; justify-content: center; gap: 6px;
-  width: 72px; padding: 6px; border-radius: 12px; border: 1px dashed var(--aurora-line);
+  flex: none; display: flex; align-items: stretch; justify-content: center;
+  min-width: 96px; padding: 6px; border-radius: 12px; border: 1px dashed var(--aurora-line);
   background: var(--aurora-panel-2);
 }
-.gen-rail-more input[type='text'] {
-  width: 100%; min-height: 36px; margin: 0; padding: 6px 8px; text-align: center;
-  font-size: 13px;
+.gen-rail-more .gen-add-version {
+  width: 100%; min-height: 100%; padding: 10px 12px; white-space: normal;
+  line-height: 1.25; text-align: center; font-weight: 700;
 }
-.gen-rail-more .btn { width: 100%; padding: 7px 8px; }
 .gen-rail-hint { margin: 0; }
 .gen-focus-card {
   border: 1px solid var(--aurora-line); border-radius: 18px; padding: 12px 14px 14px;
