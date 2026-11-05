@@ -341,7 +341,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     <div className="wide-single">
       <div className="card">
         <h3>Your ad</h3>
-        <p className="sub">Edit copy, colors, and layout. The preview updates live. Download when it looks right.</p>
+        <p className="sub">Edit copy, colors, and layout — preview updates live.</p>
         {error && <div className="err" role="alert">{error}</div>}
 
         {showCreating && (

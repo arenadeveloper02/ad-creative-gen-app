@@ -339,7 +339,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   }
 
   return (
-    <>
+    <div className="wizard-fit">
       <AgentCrumb backHref="/" />
       <Stepper step={step} canGoto={canGoto} onGoto={goto} />
       {step === 1 && (
@@ -381,6 +381,6 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           }}
         />
       )}
-    </>
+    </div>
   );
 }

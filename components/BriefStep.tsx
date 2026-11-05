@@ -616,217 +616,229 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     <div className="wide-single">
       <div className="card">
         <h3>Tell us about the ad</h3>
-        <p className="sub">Start with the product, the goal, and your brand rules. Choose a saved brand profile or upload new brand assets.</p>
+        <p className="sub">Product, goal, and brand — then continue to platform.</p>
 
-        <label htmlFor="desc">Describe the ad you want</label>
-        <textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Two founders in a glass office reviewing a sales dashboard. Clean daylight, no clutter. Keep professional navy blue on the screen and suits, or brand red on the logo and one accent." />
-        <p className="hint">Write the picture here. This is what the image follows. Say professional blue or red if that is the brand colour you want kept.</p>
+        <div className="brief-layout">
+          <div className="brief-col">
+            <label htmlFor="desc">Describe the ad you want</label>
+            <textarea
+              id="desc"
+              className="short"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Two founders in a glass office reviewing a sales dashboard. Clean daylight, no clutter."
+            />
+            <p className="hint">Describe the picture — colors and scene the image should follow.</p>
 
-        <label htmlFor="goal">What should this ad achieve?</label>
-        <select id="goal" value={goal} onChange={(e) => setGoal(e.target.value)}>
-          {GOALS.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
+            <label htmlFor="goal">What should this ad achieve?</label>
+            <select id="goal" value={goal} onChange={(e) => setGoal(e.target.value)}>
+              {GOALS.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
 
-        <h4 style={{ marginTop: 22 }}>Brand profile, guidelines and assets</h4>
-        <p className="hint">Write the brand yourself, or Fill with AI from the company name. Or pick a saved profile.</p>
-
-        <div className="brand-panel">
-          <label>Brand profile</label>
-          <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
-            <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
-              Write manually
-            </button>
-            <span className="brand-or" aria-hidden="true">OR</span>
-            <button
-              type="button"
-              className={`chip${brandMode === 'existing' ? ' on' : ''}`}
-              disabled={profiles.length === 0}
-              onClick={chooseExisting}
-            >
-              Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
-            </button>
-          </div>
-          {profiles.length === 0 && (
-            <p className="hint">No saved profiles yet. Write one manually or Fill with AI — it will appear under Use existing.</p>
-          )}
-
-          {brandMode === 'existing' && (
-            <>
-              <label htmlFor="profileSelect">Saved profile</label>
-              <select
-                id="profileSelect"
-                value={selected?.id ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === '') return;
-                  applyProfile(value);
-                }}
-              >
-                {profiles.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-
-          {selected && (
-            <div className="footer" style={{ marginTop: 12 }}>
-              <button type="button" className="btn ghost sm" onClick={() => void updateProfile()}>
-                Update profile
-              </button>
-              <button type="button" className="btn danger sm" onClick={() => void deleteProfile()}>
-                Delete
-              </button>
-            </div>
-          )}
-
-          <div className="row">
-            <div>
-              <label htmlFor="brand">Brand / company name</label>
-              <div className="brand-name-row">
-                <input
-                  id="brand"
-                  type="text"
-                  value={brandName}
-                  onChange={(e) => setBrandName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && isNew) {
-                      e.preventDefault();
-                      if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
-                    }
-                  }}
-                  placeholder="e.g. Gentle Dental"
-                  disabled={lookingUp}
-                />
-                {isNew && (
-                  <button
-                    type="button"
-                    className="btn sm"
-                    disabled={lookingUp || uploading || brandName.trim().length < 2}
-                    onClick={() => void fillBrandWithAi(true)}
-                  >
-                    {lookingUp ? 'Filling…' : 'Fill with AI'}
-                  </button>
-                )}
+            <div className="brand-panel">
+              <label>Brand profile</label>
+              <p className="hint">Write manually, Fill with AI, or use a saved profile.</p>
+              <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
+                <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
+                  Write manually
+                </button>
+                <span className="brand-or" aria-hidden="true">OR</span>
+                <button
+                  type="button"
+                  className={`chip${brandMode === 'existing' ? ' on' : ''}`}
+                  disabled={profiles.length === 0}
+                  onClick={chooseExisting}
+                >
+                  Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
+                </button>
               </div>
-            </div>
-            <div>
-              <label htmlFor="product">Product or service</label>
-              <input
-                id="product"
-                type="text"
-                value={product}
-                onChange={(e) => {
-                  productTouched.current = true;
-                  setProduct(e.target.value);
-                }}
-                placeholder="e.g. Arena AI workflow platform"
-                disabled={lookingUp}
-              />
-            </div>
-          </div>
+              {profiles.length === 0 && (
+                <p className="hint">No saved profiles yet — write one or Fill with AI.</p>
+              )}
 
-          <div className="row" style={{ marginTop: 12 }}>
-            <div>
-              <label htmlFor="website">Brand website (optional)</label>
-              <input
-                id="website"
-                type="url"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="e.g. https://gentledental.com"
-                disabled={lookingUp}
-              />
-            </div>
-            <div>
-              <label htmlFor="profileName">{isNew ? 'Profile name (optional)' : 'Profile name'}</label>
-              <input
-                id="profileName"
-                type="text"
-                value={isNew ? profileName : (selected?.name ?? '')}
-                onChange={(e) => {
-                  if (!isNew) return;
-                  setProfileName(e.target.value);
-                  setOverwrite(false);
-                }}
-                placeholder={brandName.trim() || 'e.g. Gentle Dental – Q3'}
-                disabled={!isNew || lookingUp}
-                readOnly={!isNew}
-              />
-            </div>
-          </div>
-          {lookingUp && (
-            <p className="status-line">Finding the brand site and pulling website, logos, fonts, creatives and colours…</p>
-          )}
-
-          <div className="asset-grid">
-            {FIELDS.map((field) => (
-              <div key={field.key} className="asset-card">
-                <h4>{field.title}</h4>
-                <p className="hint">{field.sub}</p>
-                <label className="drop">
-                  {uploading ? (field.key === 'guidelines' ? 'Reading guidelines…' : 'Uploading…') : field.prompt}
-                  <input
-                    type="file"
-                    multiple
-                    accept={field.accept}
-                    hidden
+              {brandMode === 'existing' && (
+                <>
+                  <label htmlFor="profileSelect">Saved profile</label>
+                  <select
+                    id="profileSelect"
+                    value={selected?.id ?? ''}
                     onChange={(e) => {
-                      if (e.target.files) void upload(field.key, e.target.files);
-                      e.target.value = '';
+                      const value = e.target.value;
+                      if (value === '') return;
+                      applyProfile(value);
                     }}
+                  >
+                    {profiles.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              {selected && (
+                <div className="footer" style={{ marginTop: 8 }}>
+                  <button type="button" className="btn ghost sm" onClick={() => void updateProfile()}>
+                    Update profile
+                  </button>
+                  <button type="button" className="btn danger sm" onClick={() => void deleteProfile()}>
+                    Delete
+                  </button>
+                </div>
+              )}
+
+              <div className="row">
+                <div>
+                  <label htmlFor="brand">Brand / company name</label>
+                  <div className="brand-name-row">
+                    <input
+                      id="brand"
+                      type="text"
+                      value={brandName}
+                      onChange={(e) => setBrandName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && isNew) {
+                          e.preventDefault();
+                          if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
+                        }
+                      }}
+                      placeholder="e.g. Gentle Dental"
+                      disabled={lookingUp}
+                    />
+                    {isNew && (
+                      <button
+                        type="button"
+                        className="btn sm"
+                        disabled={lookingUp || uploading || brandName.trim().length < 2}
+                        onClick={() => void fillBrandWithAi(true)}
+                      >
+                        {lookingUp ? 'Filling…' : 'Fill with AI'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="product">Product or service</label>
+                  <input
+                    id="product"
+                    type="text"
+                    value={product}
+                    onChange={(e) => {
+                      productTouched.current = true;
+                      setProduct(e.target.value);
+                    }}
+                    placeholder="e.g. Arena AI workflow platform"
+                    disabled={lookingUp}
                   />
-                </label>
-                <ul className="filelist">
-                  {(grouped[field.key] ?? []).map((file) => {
-                    const split = splitVariant(file.name);
-                    const onAd = renderAssetIds.includes(file.id);
-                    const pickable = field.key === 'logos' || field.key === 'fonts' || field.key === 'refs';
-                    return (
-                      <li key={file.id}>
-                        <AssetThumb file={file} dark={split.variant === 'Reverse (white)'} />
-                        {split.variant && <span className={`variant v-${split.variant.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{split.variant}</span>}
-                        <span className="nm">{split.name}</span>
-                        {pickable && (
-                          <label className={`use-on-ad${onAd ? ' on' : ''}`} title="Use this file on the final ad">
-                            <input type="checkbox" checked={onAd} onChange={() => toggleRenderAsset(file)} />
-                            On ad
-                          </label>
-                        )}
-                        <span className="sz">{fmtSize(file.size)}</span>
-                        <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
-                          ✕
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                </div>
               </div>
-            ))}
-            <div className="asset-card">
-              <h4>Brand colors</h4>
-              <p className="hint">Primary, secondary and accent — hex codes</p>
-              <div className="color-fields">
-                <HexColorField id="brief-c1" label="C1" value={c1} onChange={setC1} />
-                <HexColorField id="brief-c2" label="C2" value={c2} onChange={setC2} />
-                <HexColorField id="brief-c3" label="C3" value={c3} onChange={setC3} />
+
+              <div className="row">
+                <div>
+                  <label htmlFor="website">Brand website (optional)</label>
+                  <input
+                    id="website"
+                    type="url"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    placeholder="e.g. https://gentledental.com"
+                    disabled={lookingUp}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profileName">{isNew ? 'Profile name (optional)' : 'Profile name'}</label>
+                  <input
+                    id="profileName"
+                    type="text"
+                    value={isNew ? profileName : (selected?.name ?? '')}
+                    onChange={(e) => {
+                      if (!isNew) return;
+                      setProfileName(e.target.value);
+                      setOverwrite(false);
+                    }}
+                    placeholder={brandName.trim() || 'e.g. Gentle Dental – Q3'}
+                    disabled={!isNew || lookingUp}
+                    readOnly={!isNew}
+                  />
+                </div>
               </div>
+              {lookingUp && (
+                <p className="status-line">Finding the brand site and pulling assets…</p>
+              )}
+
+              {isNew && (
+                <div className="footer" style={{ marginTop: 8 }}>
+                  <button type="button" className="btn sm" onClick={() => void saveProfile()}>
+                    {overwrite ? 'Overwrite' : 'Save profile'}
+                  </button>
+                </div>
+              )}
+
+              {status && <p className={`status-line ${statusKind}`}>{status}</p>}
             </div>
           </div>
 
-          {isNew && (
-            <div className="footer" style={{ marginTop: 14 }}>
-              <button type="button" className="btn sm" onClick={() => void saveProfile()}>
-                {overwrite ? 'Overwrite' : 'Save profile'}
-              </button>
+          <div className="brief-col brief-assets">
+            <h4>Brand assets &amp; colors</h4>
+            <p className="hint">Upload guidelines, logos, fonts, creatives — and set hex colors.</p>
+            <div className="asset-grid">
+              {FIELDS.map((field) => (
+                <div key={field.key} className="asset-card">
+                  <h4>{field.title}</h4>
+                  <p className="hint">{field.sub}</p>
+                  <label className="drop">
+                    {uploading ? (field.key === 'guidelines' ? 'Reading guidelines…' : 'Uploading…') : field.prompt}
+                    <input
+                      type="file"
+                      multiple
+                      accept={field.accept}
+                      hidden
+                      onChange={(e) => {
+                        if (e.target.files) void upload(field.key, e.target.files);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <ul className="filelist">
+                    {(grouped[field.key] ?? []).map((file) => {
+                      const split = splitVariant(file.name);
+                      const onAd = renderAssetIds.includes(file.id);
+                      const pickable = field.key === 'logos' || field.key === 'fonts' || field.key === 'refs';
+                      return (
+                        <li key={file.id}>
+                          <AssetThumb file={file} dark={split.variant === 'Reverse (white)'} />
+                          {split.variant && <span className={`variant v-${split.variant.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{split.variant}</span>}
+                          <span className="nm">{split.name}</span>
+                          {pickable && (
+                            <label className={`use-on-ad${onAd ? ' on' : ''}`} title="Use this file on the final ad">
+                              <input type="checkbox" checked={onAd} onChange={() => toggleRenderAsset(file)} />
+                              On ad
+                            </label>
+                          )}
+                          <span className="sz">{fmtSize(file.size)}</span>
+                          <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
+                            ✕
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+              <div className="asset-card">
+                <h4>Brand colors</h4>
+                <p className="hint">Primary, secondary and accent — hex</p>
+                <div className="color-fields">
+                  <HexColorField id="brief-c1" label="C1" value={c1} onChange={setC1} />
+                  <HexColorField id="brief-c2" label="C2" value={c2} onChange={setC2} />
+                  <HexColorField id="brief-c3" label="C3" value={c3} onChange={setC3} />
+                </div>
+              </div>
             </div>
-          )}
-
-          {status && <p className={`status-line ${statusKind}`}>{status}</p>}
+          </div>
         </div>
 
         {error && <div className="err" role="alert">{error}</div>}
