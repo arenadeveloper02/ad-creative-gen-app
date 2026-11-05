@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import HexColorField from '@/components/HexColorField';
 import {
-  clearPopupOrigin,
   positionPatch,
   readTextStyle,
   readTextValue,
@@ -405,8 +404,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           brand={project.brandName}
                           image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
                           logo={logoImageFor(version)}
-                          logos={[]}
-                          activeLogoId={null}
                           active={version.id === active.id}
                           editingKind={null}
                           onCanvas={(node) => {
@@ -414,12 +411,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                             canvasRefs.current[version.id] = node;
                           }}
                           onMove={() => {}}
-                          onStyle={() => {}}
-                          onText={() => {}}
                           onOpenEdit={() => setActiveId(version.id)}
-                          onSaveEdit={() => {}}
-                          onPickLogo={() => {}}
-                          onCancelLogo={() => {}}
                         />
                       )}
                     </button>
@@ -475,19 +467,11 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     brand={project.brandName}
                     image={isHttpsUrl(active.imageUrl) && loadedUrls[active.imageUrl] ? imageCache.current[active.imageUrl] : null}
                     logo={logoImageFor(active)}
-                    logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
-                    activeLogoId={activeLogoId}
                     active
                     editingKind={textEdit?.versionId === active.id ? textEdit.kind : null}
                     onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
                     onMove={(kind, x, y, width, height) => {
                       onPatch({ ...active, ...positionPatch(kind, x, y, width, height) });
-                    }}
-                    onStyle={(kind, style) => {
-                      onPatch({ ...active, ...stylePatch(kind, style) });
-                    }}
-                    onText={(kind, value) => {
-                      onPatch({ ...active, ...textValuePatch(kind, value) });
                     }}
                     onOpenEdit={(kind) => {
                       setTextEdit((current) =>
@@ -496,21 +480,12 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           : { versionId: active.id, kind },
                       );
                     }}
-                    onSaveEdit={() => setTextEdit(null)}
-                    onPickLogo={(id) => {
-                      onPatch({ ...active, logoAssetId: id, showLogo: true });
-                      setTextEdit(null);
-                    }}
-                    onCancelLogo={() => {
-                      onPatch({ ...active, showLogo: false });
-                      setTextEdit(null);
-                    }}
                   />
                 )}
                 <p className="hint gen-focus-status">
                   {extraPending(active)
                     ? 'Still drawing this version…'
-                    : `${imageState(active)}. Click the logo for options · drag to move · click text to edit.`}
+                    : `${imageState(active)}. Drag text or the logo to move it. Type settings open on the right.`}
                 </p>
                 <div className="gen-image-edit">
                   <label htmlFor={`edit-${active.id}`}>Update this image</label>
@@ -555,67 +530,54 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
 
             <div className="gen-side">
               {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
-              <h4>Modify version {letter(active.position)}</h4>
-              <p className="hint">Click headline, subline or CTA on the preview to edit type. Save or click the same text again to close.</p>
-              <label htmlFor="mHeadline">Headline</label>
-              <input id="mHeadline" type="text" value={active.headline} onChange={(e) => patch({ headline: e.target.value, showHeadline: true })} />
-              <div className="text-toggle-row">
-                <button type="button" className="btn ghost sm" disabled={active.showHeadline === false} onClick={() => patch({ showHeadline: false })}>Hide</button>
-                <button type="button" className="btn ghost sm" disabled={active.showHeadline !== false || active.headline.trim() === ''} onClick={() => patch({ showHeadline: true })}>Show</button>
-              </div>
-              <label htmlFor="mSub">Subline</label>
-              <input
-                id="mSub"
-                type="text"
-                value={active.sub}
-                placeholder="Optional"
-                onChange={(e) => {
-                  const sub = e.target.value;
-                  patch({ sub, showSub: sub.trim() !== '' ? true : active.showSub });
+              <SideInspector
+                version={active}
+                selected={textEdit?.versionId === active.id ? textEdit.kind : null}
+                logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
+                activeLogoId={activeLogoId}
+                onText={(kind, value) => patch(textValuePatch(kind, value))}
+                onStyle={(kind, style) => patch(stylePatch(kind, style))}
+                onPickLogo={(id) => {
+                  patch({ logoAssetId: id, showLogo: true });
+                }}
+                onCancelLogo={() => patch({ showLogo: false })}
+                onDone={() => setTextEdit(null)}
+                onToggle={(kind, show) => {
+                  if (kind === 'headline') patch({ showHeadline: show });
+                  if (kind === 'sub') patch({ showSub: show });
+                  if (kind === 'cta') patch({ showCta: show });
                 }}
               />
-              <div className="text-toggle-row">
-                <button type="button" className="btn ghost sm" disabled={active.showSub === false || active.sub.trim() === ''} onClick={() => patch({ showSub: false })}>Hide</button>
-                <button type="button" className="btn ghost sm" disabled={active.showSub !== false || active.sub.trim() === ''} onClick={() => patch({ showSub: true })}>Show</button>
-              </div>
-              <label htmlFor="mCta">CTA</label>
-              <input id="mCta" type="text" value={active.cta} onChange={(e) => patch({ cta: e.target.value })} />
-              <label className="show-toggle" htmlFor="showCta">
-                <input
-                  id="showCta"
-                  type="checkbox"
-                  checked={active.showCta !== false}
-                  onChange={(e) => patch({ showCta: e.target.checked })}
-                />
-                <span>Show CTA on the image</span>
-              </label>
-              <label htmlFor="mPrimary">Primary text</label>
-              <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
-              <label htmlFor="mLayout">Layout</label>
-              <select id="mLayout" value={active.layout} onChange={(e) => patch({ layout: e.target.value as VersionDTO['layout'] })}>
-                <option value="left">Left aligned</option>
-                <option value="center">Centered</option>
-                <option value="bottom">Bottom band</option>
-              </select>
-              <label htmlFor="mBg">Background</label>
-              <select id="mBg" value={active.bg} onChange={(e) => patch({ bg: e.target.value as VersionDTO['bg'] })}>
-                <option value="photo">Photo</option>
-                <option value="gradient">Brand tint</option>
-                <option value="solid">Solid panel</option>
-                <option value="light">Light panel</option>
-              </select>
-              <label>Colors</label>
-              <div className="color-fields">
-                <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
-                <HexColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
-                <HexColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
-              </div>
-              <label htmlFor="mSize">Size</label>
-              <select id="mSize" value={active.size} onChange={(e) => patch({ size: e.target.value })}>
-                {SIZES.map((size) => (
-                  <option key={size} value={size}>{size.replace('x', ' × ')}</option>
-                ))}
-              </select>
+              <details className="gen-meta-card gen-more">
+                <summary>Layout, colors &amp; size</summary>
+                <label htmlFor="mPrimary">Primary text</label>
+                <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
+                <label htmlFor="mLayout">Layout</label>
+                <select id="mLayout" value={active.layout} onChange={(e) => patch({ layout: e.target.value as VersionDTO['layout'] })}>
+                  <option value="left">Left aligned</option>
+                  <option value="center">Centered</option>
+                  <option value="bottom">Bottom band</option>
+                </select>
+                <label htmlFor="mBg">Background</label>
+                <select id="mBg" value={active.bg} onChange={(e) => patch({ bg: e.target.value as VersionDTO['bg'] })}>
+                  <option value="photo">Photo</option>
+                  <option value="gradient">Brand tint</option>
+                  <option value="solid">Solid panel</option>
+                  <option value="light">Light panel</option>
+                </select>
+                <label>Colors</label>
+                <div className="color-fields">
+                  <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
+                  <HexColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
+                  <HexColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
+                </div>
+                <label htmlFor="mSize">Size</label>
+                <select id="mSize" value={active.size} onChange={(e) => patch({ size: e.target.value })}>
+                  {SIZES.map((size) => (
+                    <option key={size} value={size}>{size.replace('x', ' × ')}</option>
+                  ))}
+                </select>
+              </details>
 
               <div className="gen-actions">
                 <p className="gen-actions-label">Main actions</p>
@@ -648,47 +610,30 @@ function AdStage({
   brand,
   image,
   logo,
-  logos,
-  activeLogoId,
   active,
   editingKind,
   compact = false,
   onCanvas,
   onMove,
-  onStyle,
-  onText,
   onOpenEdit,
-  onSaveEdit,
-  onPickLogo,
-  onCancelLogo,
 }: {
   version: VersionDTO;
   brand: string;
   image: HTMLImageElement | null | undefined;
   logo: HTMLImageElement | null;
-  logos: { id: string; name: string; url: string }[];
-  activeLogoId: string | null;
   active: boolean;
   editingKind: TextKind | null;
   compact?: boolean;
   onCanvas: (node: HTMLCanvasElement | null) => void;
   onMove: (kind: TextKind, x: number, y: number, width: number, height: number) => void;
-  onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
-  onText: (kind: TextKind, value: string) => void;
   onOpenEdit: (kind: TextKind) => void;
-  onSaveEdit: () => void;
-  onPickLogo: (id: string) => void;
-  onCancelLogo: () => void;
 }) {
-  const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragRef = useRef<{ kind: TextKind; ox: number; oy: number; x: number; y: number; moved: boolean } | null>(null);
-  const popDragRef = useRef<{ ox: number; oy: number; x: number; y: number } | null>(null);
   const [frame, setFrame] = useState({ sw: 1, sh: 1, cw: 1, ch: 1 });
   const [dragLive, setDragLive] = useState<{ kind: TextKind; x: number; y: number } | null>(null);
   const [boxes, setBoxes] = useState<TextBox[]>([]);
-  const [popPos, setPopPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -710,29 +655,8 @@ function AdStage({
     return () => ro.disconnect();
   }, [version, brand, image, logo, dragLive]);
 
-  // Fresh open → park the popup clear of the selected text; user can drag it anywhere after.
-  useEffect(() => {
-    setPopPos(null);
-  }, [editingKind, version.id]);
-
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
-  const editBox = editingKind && editingKind !== 'logo' ? boxes.find((box) => box.kind === editingKind) ?? null : null;
-  const logoBox = boxes.find((box) => box.kind === 'logo') ?? null;
-  const editStyle = editingKind && editingKind !== 'logo' ? readTextStyle(version, editingKind) : null;
-  const sizeLabel = editStyle ? Math.round(editStyle.scale * 100) : 100;
-  const trackLabel = editStyle ? Math.round(editStyle.track * 100) : 0;
-  const leadLabel = editStyle ? Math.round(editStyle.lead * 100) : 100;
-  const popW = 260;
-  const popH = 360;
-  const logoPopW = 280;
-  const logoPopH = 168;
-  const logoDrawerOpen = !compact && editingKind === 'logo';
-  const logoPopOrigin = logoBox
-    ? clearPopupOrigin(logoBox, scaleX, scaleY, frame.sw, frame.sh, logoPopW, logoPopH)
-    : { x: Math.max(8, frame.sw - logoPopW - 8), y: 8 };
-  const logoPopLeft = popPos && logoDrawerOpen ? popPos.x : logoPopOrigin.x;
-  const logoPopTop = popPos && logoDrawerOpen ? popPos.y : logoPopOrigin.y;
 
   function onPointerDown(kind: TextKind, event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -785,56 +709,8 @@ function AdStage({
     }
   }
 
-  function onPopPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const stage = stageRef.current;
-    if (!stage) return;
-    const origin = popPos ?? (logoDrawerOpen
-      ? logoPopOrigin
-      : editBox
-        ? clearPopupOrigin(editBox, scaleX, scaleY, frame.sw, frame.sh, popW, popH)
-        : { x: 8, y: 8 });
-    const rect = stage.getBoundingClientRect();
-    popDragRef.current = {
-      ox: event.clientX - rect.left - origin.x,
-      oy: event.clientY - rect.top - origin.y,
-      x: origin.x,
-      y: origin.y,
-    };
-    setPopPos(origin);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onPopPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = popDragRef.current;
-    const stage = stageRef.current;
-    if (!drag || !stage) return;
-    const rect = stage.getBoundingClientRect();
-    const x = Math.min(Math.max(-40, event.clientX - rect.left - drag.ox), Math.max(8, frame.sw - 48));
-    const y = Math.min(Math.max(-20, event.clientY - rect.top - drag.oy), Math.max(8, frame.sh - 48));
-    drag.x = x;
-    drag.y = y;
-    setPopPos({ x, y });
-  }
-
-  function onPopPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    popDragRef.current = null;
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // Capture may already be released.
-    }
-  }
-
-  const defaultPop = editBox
-    ? clearPopupOrigin(editBox, scaleX, scaleY, frame.sw, frame.sh, popW, popH)
-    : { x: 8, y: 8 };
-  const popLeft = popPos?.x ?? defaultPop.x;
-  const popTop = popPos?.y ?? defaultPop.y;
-
   return (
-    <div ref={stageRef} className={`ad-stage${active ? ' on' : ''}${editingKind ? ' editing' : ''}${compact ? ' compact' : ''}`}>
+    <div className={`ad-stage${active ? ' on' : ''}${editingKind ? ' editing' : ''}${compact ? ' compact' : ''}`}>
       <div ref={frameRef} className="ad-stage-frame">
         <canvas
           ref={(node) => {
@@ -865,7 +741,7 @@ function AdStage({
           </div>
         ))}
       </div>
-      {!compact && !logo && logos.length > 0 && (
+      {!compact && (
         <button
           type="button"
           className="logo-stage-open"
@@ -877,184 +753,158 @@ function AdStage({
           Logo
         </button>
       )}
-      {logoDrawerOpen && (
-        <div
-          className="logo-edit-pop"
-          style={{ left: logoPopLeft, top: logoPopTop, width: logoPopW }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          role="dialog"
-          aria-label="Brand logos"
-        >
-          <div
-            className="text-edit-pop-drag"
-            onPointerDown={onPopPointerDown}
-            onPointerMove={onPopPointerMove}
-            onPointerUp={onPopPointerUp}
-            onPointerCancel={onPopPointerUp}
-            title="Drag to move"
-          >
-            <p className="text-edit-pop-title">Brand logos</p>
-            <span className="text-edit-pop-grip" aria-hidden="true">⋮⋮</span>
-          </div>
-          <p className="hint logo-edit-hint">Pick one for this ad, or cancel the logo.</p>
-          <div className="logo-drawer-strip" role="listbox" aria-label="Brand logos">
-            {logos.map((item) => {
-              const selected = activeLogoId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={`logo-drawer-item${selected ? ' on' : ''}`}
-                  title={item.name || 'Logo'}
-                  onClick={() => onPickLogo(item.id)}
-                >
-                  <img src={item.url} alt={item.name || 'Logo'} />
-                </button>
-              );
-            })}
-          </div>
-          <div className="logo-edit-actions">
-            <button type="button" className="btn ghost sm" disabled={!activeLogoId} onClick={onCancelLogo}>
-              Cancel logo
-            </button>
-            <button type="button" className="btn sm" onClick={onSaveEdit}>
-              Close
-            </button>
-          </div>
+    </div>
+  );
+}
+
+function shown(version: VersionDTO, kind: TextKind): boolean {
+  if (kind === 'headline') return version.showHeadline !== false;
+  if (kind === 'sub') return version.showSub !== false;
+  if (kind === 'cta') return version.showCta !== false;
+  return version.showLogo !== false;
+}
+
+function SideInspector({
+  version,
+  selected,
+  logos,
+  activeLogoId,
+  onText,
+  onStyle,
+  onPickLogo,
+  onCancelLogo,
+  onDone,
+  onToggle,
+}: {
+  version: VersionDTO;
+  selected: TextKind | null;
+  logos: { id: string; name: string; url: string }[];
+  activeLogoId: string | null;
+  onText: (kind: TextKind, value: string) => void;
+  onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
+  onPickLogo: (id: string) => void;
+  onCancelLogo: () => void;
+  onDone: () => void;
+  onToggle: (kind: TextKind, show: boolean) => void;
+}) {
+  if (!selected) {
+    return (
+      <div className="gen-inspector-empty">
+        <p className="text-edit-pop-title">Settings</p>
+        <p className="hint">Click headline, subline, CTA, or the logo on the ad. Type settings stay in this panel.</p>
+      </div>
+    );
+  }
+
+  if (selected === 'logo') {
+    return (
+      <div className="gen-inspector" role="region" aria-label="Brand logos">
+        <p className="text-edit-pop-title">Brand logos</p>
+        {logos.length === 0 ? (
+          <p className="hint">No logo uploaded on the brief yet.</p>
+        ) : (
+          <>
+            <p className="hint logo-edit-hint">Pick one for this ad, or cancel the logo.</p>
+            <div className="logo-drawer-strip" role="listbox" aria-label="Brand logos">
+              {logos.map((item) => {
+                const on = activeLogoId === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    className={`logo-drawer-item${on ? ' on' : ''}`}
+                    title={item.name || 'Logo'}
+                    onClick={() => onPickLogo(item.id)}
+                  >
+                    <img src={item.url} alt={item.name || 'Logo'} />
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        <div className="logo-edit-actions">
+          <button type="button" className="btn ghost sm" disabled={!activeLogoId} onClick={onCancelLogo}>
+            Cancel logo
+          </button>
+          <button type="button" className="btn sm" onClick={onDone}>Done</button>
         </div>
-      )}
-      {!compact && editingKind && editingKind !== 'logo' && editBox && editStyle && (
-        <div
-          className="text-edit-pop"
-          style={{ left: popLeft, top: popTop, width: popW }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          role="dialog"
-          aria-label={`Edit ${textKindLabel(editingKind)}`}
-        >
-          <div
-            className="text-edit-pop-drag"
-            onPointerDown={onPopPointerDown}
-            onPointerMove={onPopPointerMove}
-            onPointerUp={onPopPointerUp}
-            onPointerCancel={onPopPointerUp}
-            title="Drag to move"
+      </div>
+    );
+  }
+
+  const style = readTextStyle(version, selected);
+  const sizeLabel = Math.round(style.scale * 100);
+  const trackLabel = Math.round(style.track * 100);
+  const leadLabel = Math.round(style.lead * 100);
+  const visible = shown(version, selected);
+
+  return (
+    <div className="gen-inspector" role="region" aria-label={`Edit ${textKindLabel(selected)}`}>
+      <p className="text-edit-pop-title">{textKindLabel(selected)}</p>
+      <textarea
+        className="text-edit-pop-input"
+        rows={selected === 'cta' ? 2 : 3}
+        value={readTextValue(version, selected)}
+        onChange={(e) => onText(selected, e.target.value)}
+        placeholder={selected === 'sub' ? 'Optional subline' : undefined}
+      />
+      <div className="text-toggle-row">
+        <button type="button" className="btn ghost sm" disabled={!visible} onClick={() => onToggle(selected, false)}>Hide</button>
+        <button type="button" className="btn ghost sm" disabled={visible} onClick={() => onToggle(selected, true)}>Show</button>
+      </div>
+      <div className="text-edit-pop-section">
+        <span className="text-edit-pop-section-label">Weight &amp; style</span>
+        <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
+          <button
+            type="button"
+            className={`text-style-btn${style.bold ? ' on' : ''}`}
+            aria-pressed={style.bold}
+            title="Bold"
+            onClick={() => onStyle(selected, { bold: !style.bold })}
           >
-            <p className="text-edit-pop-title">{textKindLabel(editingKind)}</p>
-            <span className="text-edit-pop-grip" aria-hidden="true">⋮⋮</span>
-          </div>
-          <textarea
-            className="text-edit-pop-input"
-            rows={editingKind === 'cta' ? 2 : 3}
-            value={readTextValue(version, editingKind)}
-            onChange={(e) => onText(editingKind, e.target.value)}
-            placeholder={editingKind === 'sub' ? 'Optional subline' : undefined}
-          />
-          <div className="text-edit-pop-section">
-            <span className="text-edit-pop-section-label">Weight &amp; style</span>
-            <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
-              <button
-                type="button"
-                className={`text-style-btn${editStyle.bold ? ' on' : ''}`}
-                aria-pressed={editStyle.bold}
-                title="Bold"
-                onClick={() => onStyle(editingKind, { bold: !editStyle.bold })}
-              >
-                <strong>B</strong>
-              </button>
-              <button
-                type="button"
-                className={`text-style-btn italic${editStyle.italic ? ' on' : ''}`}
-                aria-pressed={editStyle.italic}
-                title="Italic"
-                onClick={() => onStyle(editingKind, { italic: !editStyle.italic })}
-              >
-                I
-              </button>
-            </div>
-          </div>
-          <div className="text-edit-pop-row">
-            <span className="text-edit-pop-label">Size</span>
-            <div className="text-edit-pop-tools">
-              <button
-                type="button"
-                className="text-style-btn"
-                title="Smaller"
-                disabled={editStyle.scale <= 0.7}
-                onClick={() => onStyle(editingKind, { scale: Math.round((editStyle.scale - 0.05) * 100) / 100 })}
-              >
-                −
-              </button>
-              <span className="text-style-size" aria-live="polite">{sizeLabel}%</span>
-              <button
-                type="button"
-                className="text-style-btn"
-                title="Larger"
-                disabled={editStyle.scale >= 1.6}
-                onClick={() => onStyle(editingKind, { scale: Math.round((editStyle.scale + 0.05) * 100) / 100 })}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="text-edit-pop-row">
-            <span className="text-edit-pop-label">Letter spacing</span>
-            <div className="text-edit-pop-tools">
-              <button
-                type="button"
-                className="text-style-btn"
-                title="Tighter"
-                disabled={editStyle.track <= 0}
-                onClick={() => onStyle(editingKind, { track: Math.round((editStyle.track - 0.01) * 100) / 100 })}
-              >
-                −
-              </button>
-              <span className="text-style-size" aria-live="polite">{trackLabel}</span>
-              <button
-                type="button"
-                className="text-style-btn"
-                title="Looser"
-                disabled={editStyle.track >= 0.25}
-                onClick={() => onStyle(editingKind, { track: Math.round((editStyle.track + 0.01) * 100) / 100 })}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="text-edit-pop-row">
-            <span className="text-edit-pop-label">Line height</span>
-            <div className="text-edit-pop-tools">
-              <button
-                type="button"
-                className="text-style-btn"
-                title="Tighter lines"
-                disabled={editStyle.lead <= 0.85}
-                onClick={() => onStyle(editingKind, { lead: Math.round((editStyle.lead - 0.05) * 100) / 100 })}
-              >
-                −
-              </button>
-              <span className="text-style-size" aria-live="polite">{leadLabel}%</span>
-              <button
-                type="button"
-                className="text-style-btn"
-                title="More line space"
-                disabled={editStyle.lead >= 1.6}
-                onClick={() => onStyle(editingKind, { lead: Math.round((editStyle.lead + 0.05) * 100) / 100 })}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="text-edit-pop-footer">
-            <button type="button" className="btn sm text-edit-pop-save" onClick={onSaveEdit}>
-              Done
-            </button>
-          </div>
+            <strong>B</strong>
+          </button>
+          <button
+            type="button"
+            className={`text-style-btn italic${style.italic ? ' on' : ''}`}
+            aria-pressed={style.italic}
+            title="Italic"
+            onClick={() => onStyle(selected, { italic: !style.italic })}
+          >
+            I
+          </button>
         </div>
-      )}
+      </div>
+      <div className="text-edit-pop-row">
+        <span className="text-edit-pop-label">Size</span>
+        <div className="text-edit-pop-tools">
+          <button type="button" className="text-style-btn" title="Smaller" disabled={style.scale <= 0.7} onClick={() => onStyle(selected, { scale: Math.round((style.scale - 0.05) * 100) / 100 })}>−</button>
+          <span className="text-style-size" aria-live="polite">{sizeLabel}%</span>
+          <button type="button" className="text-style-btn" title="Larger" disabled={style.scale >= 1.6} onClick={() => onStyle(selected, { scale: Math.round((style.scale + 0.05) * 100) / 100 })}>+</button>
+        </div>
+      </div>
+      <div className="text-edit-pop-row">
+        <span className="text-edit-pop-label">Letter spacing</span>
+        <div className="text-edit-pop-tools">
+          <button type="button" className="text-style-btn" title="Tighter" disabled={style.track <= 0} onClick={() => onStyle(selected, { track: Math.round((style.track - 0.01) * 100) / 100 })}>−</button>
+          <span className="text-style-size" aria-live="polite">{trackLabel}</span>
+          <button type="button" className="text-style-btn" title="Looser" disabled={style.track >= 0.25} onClick={() => onStyle(selected, { track: Math.round((style.track + 0.01) * 100) / 100 })}>+</button>
+        </div>
+      </div>
+      <div className="text-edit-pop-row">
+        <span className="text-edit-pop-label">Line height</span>
+        <div className="text-edit-pop-tools">
+          <button type="button" className="text-style-btn" title="Tighter lines" disabled={style.lead <= 0.85} onClick={() => onStyle(selected, { lead: Math.round((style.lead - 0.05) * 100) / 100 })}>−</button>
+          <span className="text-style-size" aria-live="polite">{leadLabel}%</span>
+          <button type="button" className="text-style-btn" title="More line space" disabled={style.lead >= 1.6} onClick={() => onStyle(selected, { lead: Math.round((style.lead + 0.05) * 100) / 100 })}>+</button>
+        </div>
+      </div>
+      <div className="text-edit-pop-footer">
+        <button type="button" className="btn sm text-edit-pop-save" onClick={onDone}>Done</button>
+      </div>
     </div>
   );
 }

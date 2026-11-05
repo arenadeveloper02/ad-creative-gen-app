@@ -271,14 +271,27 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
 }
 .ad-stage canvas { width: 100%; height: auto; display: block; border-radius: 12px; background: var(--aurora-inset); }
 .ad-handle.selected { border-color: var(--aurora-c1); box-shadow: 0 0 0 1px color-mix(in srgb, var(--aurora-c1) 35%, transparent); }
+.gen-inspector,
 .text-edit-pop {
-  position: absolute; z-index: 6; box-sizing: border-box;
+  box-sizing: border-box;
   display: flex; flex-direction: column; gap: 12px;
   padding: 12px 14px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.99);
-  border: 1px solid var(--aurora-line2); box-shadow: 0 18px 40px -24px rgba(21, 19, 43, 0.55);
+  border: 1px solid var(--aurora-line2);
+}
+.gen-inspector { position: static; width: 100%; }
+.gen-inspector-empty {
+  padding: 14px; border-radius: 16px; border: 1px dashed var(--aurora-line);
+  background: var(--aurora-panel-2);
+}
+.gen-inspector-empty .hint { margin: 6px 0 0; }
+.gen-more { margin-top: 10px; }
+.text-edit-pop {
+  position: absolute; z-index: 6;
+  box-shadow: 0 18px 40px -24px rgba(21, 19, 43, 0.55);
   backdrop-filter: blur(12px);
 }
-html.dark .text-edit-pop { background: rgba(24, 22, 40, 0.98); }
+html.dark .text-edit-pop,
+html.dark .gen-inspector { background: rgba(24, 22, 40, 0.98); }
 .text-edit-pop-drag {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin: -2px -4px 0; padding: 4px 4px 10px; cursor: grab; touch-action: none;
