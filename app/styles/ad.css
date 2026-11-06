@@ -265,6 +265,7 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
   cursor: pointer; font-size: 13px; font-weight: 600; color: var(--aurora-text2);
 }
 .gen-meta-card[open] > summary { margin-bottom: 8px; }
+.gen-inspector .gen-meta-card { margin-top: 0; }
 .gen-side {
   min-width: 0;
   max-height: calc(100vh - 140px);

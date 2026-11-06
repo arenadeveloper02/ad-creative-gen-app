@@ -683,61 +683,57 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 background={(
                   <div className="gen-inspector" role="region" aria-label="Background">
                     <p className="text-edit-pop-title">Background</p>
-                    <p className="hint">Crop, focus, and the photo tools. The prompt under the ad still redraws with AI.</p>
-                    <span className="text-edit-pop-label">Crop</span>
-                    <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
-                      {CROP_PRESETS.map((item) => {
-                        const zoom = active.imageZoom ?? 1;
-                        const on = near(zoom, item.zoom, 0.05);
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={`gen-tool-chip${on ? ' on' : ''}`}
-                            aria-pressed={on}
-                            onClick={() => patch({ imageZoom: item.zoom })}
-                          >
-                            {item.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span className="text-edit-pop-label">Focus</span>
-                    <div className="gen-tool-chips" role="toolbar" aria-label="Focus">
-                      {FOCUS_PRESETS.map((item) => {
-                        const fx = active.imageFocusX ?? 0.5;
-                        const fy = active.imageFocusY ?? 0.5;
-                        const on = near(fx, item.x) && near(fy, item.y);
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={`gen-tool-chip${on ? ' on' : ''}`}
-                            aria-pressed={on}
-                            onClick={() => patch({ imageFocusX: item.x, imageFocusY: item.y })}
-                          >
-                            {item.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span className="text-edit-pop-label">Background</span>
-                    <div className="gen-tool-chips" role="toolbar" aria-label="Background">
-                      {BACKGROUNDS.map((item) => {
-                        const on = active.bg === item;
-                        return (
-                          <button
-                            key={item}
-                            type="button"
-                            className={`gen-tool-chip${on ? ' on' : ''}`}
-                            aria-pressed={on}
-                            onClick={() => patch({ bg: item })}
-                          >
-                            {BG_LABELS[item]}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <p className="hint">Open a row for its controls. The prompt under the ad still redraws with AI.</p>
+                    <details className="gen-meta-card">
+                      <summary>Crop</summary>
+                      <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
+                        {CROP_PRESETS.map((item) => {
+                          const zoom = active.imageZoom ?? 1;
+                          const on = near(zoom, item.zoom, 0.05);
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`gen-tool-chip${on ? ' on' : ''}`}
+                              aria-pressed={on}
+                              onClick={() => patch({ imageZoom: item.zoom })}
+                            >
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
+                    <details className="gen-meta-card">
+                      <summary>Focus</summary>
+                      <div className="gen-tool-chips" role="toolbar" aria-label="Focus">
+                        {FOCUS_PRESETS.map((item) => {
+                          const fx = active.imageFocusX ?? 0.5;
+                          const fy = active.imageFocusY ?? 0.5;
+                          const on = near(fx, item.x) && near(fy, item.y);
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`gen-tool-chip${on ? ' on' : ''}`}
+                              aria-pressed={on}
+                              onClick={() => patch({ imageFocusX: item.x, imageFocusY: item.y })}
+                            >
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
+                    <details className="gen-meta-card">
+                      <summary>Background</summary>
+                      <label htmlFor="mBg">Fill</label>
+                      <select id="mBg" value={active.bg} onChange={(e) => patch({ bg: e.target.value as VersionDTO['bg'] })}>
+                        {BACKGROUNDS.map((item) => (
+                          <option key={item} value={item}>{BG_LABELS[item]}</option>
+                        ))}
+                      </select>
+                    </details>
                     <PhotoTools
                       version={active}
                       versions={project.versions}

@@ -4,16 +4,6 @@ import { useRef, useState } from 'react';
 import { DEFAULT_FINISH, readImageFinish } from '@/lib/image-finish';
 import type { ImageFinish, VersionDTO } from '@/lib/types';
 
-type Pill = 'adjust' | 'crop' | 'background' | 'edit' | 'finish';
-
-const PILLS: { id: Pill; label: string }[] = [
-  { id: 'adjust', label: 'Adjust' },
-  { id: 'crop', label: 'Crop' },
-  { id: 'background', label: 'Background' },
-  { id: 'edit', label: 'Edit' },
-  { id: 'finish', label: 'Finish' },
-];
-
 const GRADES: { key: keyof ImageFinish; label: string; min: number; max: number }[] = [
   { key: 'exposure', label: 'Exposure', min: -100, max: 100 },
   { key: 'contrast', label: 'Contrast', min: -100, max: 100 },
@@ -52,7 +42,6 @@ export default function PhotoTools({
   onEdit: (edit: PhotoEdit) => void;
   onUndo: () => void;
 }) {
-  const [pill, setPill] = useState<Pill>('adjust');
   const [backgroundNote, setBackgroundNote] = useState('');
   const [regionNote, setRegionNote] = useState('');
   const [strength, setStrength] = useState(45);
@@ -150,22 +139,8 @@ export default function PhotoTools({
 
   return (
     <div className="photo-tools">
-      <div className="photo-pills" role="tablist" aria-label="Photo tools">
-        {PILLS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={pill === item.id}
-            className={`gen-tool-chip${pill === item.id ? ' on' : ''}`}
-            onClick={() => setPill(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {pill === 'adjust' && (
+      <details className="gen-meta-card">
+        <summary>Adjust</summary>
         <div className="photo-pane">
           {GRADES.map((item) => (
             <label key={item.key} className="photo-slider">
@@ -184,9 +159,10 @@ export default function PhotoTools({
             Reset grade
           </button>
         </div>
-      )}
+      </details>
 
-      {pill === 'crop' && (
+      <details className="gen-meta-card">
+        <summary>Crop and rotate</summary>
         <div className="photo-pane">
           <span className="text-edit-pop-label">Drag to place the photo</span>
           <div
@@ -230,9 +206,10 @@ export default function PhotoTools({
             <button type="button" className={`gen-tool-chip${finish.flipV ? ' on' : ''}`} onClick={() => setFinish({ flipV: !finish.flipV })}>Flip V</button>
           </div>
         </div>
-      )}
+      </details>
 
-      {pill === 'background' && (
+      <details className="gen-meta-card">
+        <summary>Replace</summary>
         <div className="photo-pane">
           <p className="hint">The subject stays. Only the room, light, or set changes.</p>
           <button
@@ -260,9 +237,10 @@ export default function PhotoTools({
             Replace background
           </button>
         </div>
-      )}
+      </details>
 
-      {pill === 'edit' && (
+      <details className="gen-meta-card">
+        <summary>Edit</summary>
         <div className="photo-pane">
           <span className="text-edit-pop-label">Mark the area to change</span>
           <canvas
@@ -329,9 +307,10 @@ export default function PhotoTools({
             Undo last photo
           </button>
         </div>
-      )}
+      </details>
 
-      {pill === 'finish' && (
+      <details className="gen-meta-card">
+        <summary>Finish</summary>
         <div className="photo-pane">
           <p className="hint">Enhance cleans detail on this photo. Apply look copies the grade and crop onto the other versions without redrawing them.</p>
           <button
@@ -378,9 +357,9 @@ export default function PhotoTools({
           >
             Same background on all
           </button>
-          {backgroundNote.trim().length < 2 && <p className="hint">Write the new background under the Background pill first.</p>}
+          {backgroundNote.trim().length < 2 && <p className="hint">Write the new background under Replace first.</p>}
         </div>
-      )}
+      </details>
       {note && <p className="hint">{note}</p>}
     </div>
   );
