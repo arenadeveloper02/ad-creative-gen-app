@@ -374,7 +374,8 @@ export function drawAd(
 
   // Brand label in the top-left is a fixed obstacle; logo slot is too when present.
   const labelSize = Math.round(width * 0.032);
-  ctx.font = `600 ${labelSize}px Arial`;
+  const labelFont = fontFamily ? typeFace(true, false, labelSize, fontFamily) : `600 ${labelSize}px Arial`;
+  ctx.font = labelFont;
   const labelText = (brand || 'Your brand').toUpperCase().slice(0, 40);
   const labelBox: ZoneRect = { x: pad, y: pad - labelSize * 0.2, w: ctx.measureText(labelText).width, h: labelSize * 1.4 };
   const fixed: ZoneRect[] = [labelBox];
@@ -425,7 +426,7 @@ export function drawAd(
 
   // Brand label.
   ctx.fillStyle = bg === 'light' && hasImage ? '#FFFFFF' : ink;
-  ctx.font = `600 ${Math.round(width * 0.032)}px Arial`;
+  ctx.font = labelFont;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText((brand || 'Your brand').toUpperCase().slice(0, 40), pad, pad + Math.round(width * 0.03));

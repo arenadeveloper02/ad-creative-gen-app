@@ -196,21 +196,45 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   }, [logoIdsKey]);
 
   // Brief fonts for on-ad type — load once, then paint with the CSS family name.
+  // Headline and CTA ask for bold, so the same file is registered at those weights too.
   const fontIdsKey = fonts.map((item) => item.id).join(',');
   useEffect(() => {
     let cancelled = false;
+    const descriptors = [
+      { weight: '400', style: 'normal' },
+      { weight: '600', style: 'normal' },
+      { weight: '700', style: 'normal' },
+      { weight: '400', style: 'italic' },
+      { weight: '700', style: 'italic' },
+    ] as const;
     for (const font of fonts) {
       if (fontReadyIds[font.id] === true) continue;
       const family = fontFamilyName(font.id);
-      const face = new FontFace(family, `url(${JSON.stringify(assetUrl(font.id))})`);
-      void face.load().then((loaded) => {
+      const source = `url(${JSON.stringify(assetUrl(font.id))})`;
+      void (async () => {
+        const loaded = await Promise.all(descriptors.map(async (desc) => {
+          try {
+            return await new FontFace(family, source, desc).load();
+          } catch {
+            return null;
+          }
+        }));
         if (cancelled) return;
-        document.fonts.add(loaded);
+        const faces = loaded.filter((face): face is FontFace => face !== null);
+        if (faces.length === 0) {
+          setFontReadyIds((current) => ({ ...current, [font.id]: false }));
+          return;
+        }
+        for (const face of faces) document.fonts.add(face);
+        try {
+          await document.fonts.load(`400 16px "${family}"`);
+          await document.fonts.load(`700 16px "${family}"`);
+        } catch {
+          // The face is already added; drawing still uses it when the weight matches.
+        }
+        if (cancelled) return;
         setFontReadyIds((current) => ({ ...current, [font.id]: true }));
-      }).catch(() => {
-        if (cancelled) return;
-        setFontReadyIds((current) => ({ ...current, [font.id]: false }));
-      });
+      })();
     }
     return () => {
       cancelled = true;
