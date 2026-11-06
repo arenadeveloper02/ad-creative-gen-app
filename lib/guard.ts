@@ -1,4 +1,5 @@
 import { canonicalImageModel, canonicalImageResolution, type ImageModel, type ImageResolution } from '@/lib/fal-models';
+import { readImageFinish } from '@/lib/image-finish';
 import { ASSET_KINDS, BACKGROUNDS, COPY_SOURCES, GOALS, LAYOUTS, PLATFORMS, SIZES, TONES, VISUAL_STYLES, type AssetKind, type Background, type CopySource, type Layout } from '@/lib/platforms';
 import { MAX_NAME, MAX_SHORT, MAX_TEXT, MAX_URL } from '@/lib/limits';
 
@@ -183,6 +184,7 @@ export interface VersionPatch {
   imageZoom?: number;
   imageFocusX?: number | null;
   imageFocusY?: number | null;
+  imageFinish?: ReturnType<typeof readImageFinish>;
   showLogo?: boolean;
   showHeadline?: boolean;
   showSub?: boolean;
@@ -273,6 +275,7 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   const fy = cleanCoord(body.imageFocusY);
   if (fx !== undefined) patch.imageFocusX = fx;
   if (fy !== undefined) patch.imageFocusY = fy;
+  if ('imageFinish' in body) patch.imageFinish = readImageFinish(body.imageFinish);
   if (typeof body.showLogo === 'boolean') patch.showLogo = body.showLogo;
   if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
   if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;

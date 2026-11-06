@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import HexColorField from '@/components/HexColorField';
+import PhotoTools, { type PhotoEdit } from '@/components/PhotoTools';
 import {
   positionPatch,
   readTextStyle,
@@ -57,7 +58,9 @@ interface GenerateStepProps {
   error: string | null;
   onPatch: (version: VersionDTO) => void;
   onAdd: (count: number) => void;
-  onImage: (id: string, editPrompt: string) => void;
+  onImage: (id: string, editPrompt: string, extra?: Omit<PhotoEdit, 'prompt' | 'directed'> & { directed?: boolean }) => void;
+  onPatchMany: (versions: VersionDTO[]) => void;
+  onUndoImage: (id: string) => void;
   onDelete: () => void;
 }
 
@@ -117,7 +120,7 @@ function assetUrl(id: string): string {
   return `/api/assets/${encodeURIComponent(id)}`;
 }
 
-export default function GenerateStep({ project, generating, busy, thoughts, error, onPatch, onAdd, onImage, onDelete }: GenerateStepProps) {
+export default function GenerateStep({ project, generating, busy, thoughts, error, onPatch, onPatchMany, onAdd, onImage, onUndoImage, onDelete }: GenerateStepProps) {
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTyped, setDeleteTyped] = useState('');
@@ -377,9 +380,9 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
     if (settled) setRedrawIds([]);
   }, [busy, redrawIds, project.versions, loadedUrls]);
 
-  function requestImage(id: string, editPrompt: string) {
-    setRedrawIds([id]);
-    onImage(id, editPrompt);
+  function requestImage(id: string, editPrompt: string, extra?: Omit<PhotoEdit, 'prompt' | 'directed'> & { directed?: boolean }) {
+    setRedrawIds(extra?.versionIds && extra.versionIds.length > 0 ? extra.versionIds : [id]);
+    onImage(id, editPrompt, extra);
   }
 
   function extraPending(version: VersionDTO): boolean {
@@ -715,6 +718,19 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     })}
                   </div>
                 </div>
+              </details>
+              <details className="gen-meta-card">
+                <summary>Photo tools</summary>
+                <PhotoTools
+                  version={active}
+                  versions={project.versions}
+                  busy={busy || appendBusy}
+                  image={isHttpsUrl(active.imageUrl) ? imageCache.current[active.imageUrl] ?? null : null}
+                  onChange={patch}
+                  onApplyLook={onPatchMany}
+                  onUndo={() => onUndoImage(active.id)}
+                  onEdit={(edit) => requestImage(active.id, edit.prompt, edit)}
+                />
               </details>
               <details className="gen-meta-card gen-more">
                 <summary>Layout, colors &amp; size</summary>

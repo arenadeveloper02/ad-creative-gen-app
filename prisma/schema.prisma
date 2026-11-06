@@ -131,6 +131,10 @@ model AdVersion {
   // Normalized 0–1 focus point for the photo crop. Null = center.
   imageFocusX  Float?
   imageFocusY  Float?
+  // Photo grade, rotate, and flip. Empty object means the picture is unchanged.
+  imageFinish  Json     @default("{}")
+  // Previous Fal image, kept so Photo tools can undo one AI edit.
+  imagePrevUrl String?
   showLogo     Boolean  @default(true)
   showHeadline Boolean  @default(true)
   showSub      Boolean  @default(true)

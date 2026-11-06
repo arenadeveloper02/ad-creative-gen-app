@@ -84,16 +84,86 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const version = project.versions.find((item) => item.id === body.versionId);
     if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
     const editPrompt = cleanText(body.editPrompt, 1000);
+    const directed = body.directed === true;
+    const referenceAssetId = typeof body.referenceAssetId === 'string' && isId(body.referenceAssetId) ? body.referenceAssetId : null;
+    const variantCount = body.variantCount === 3 ? 3 : 1;
+    let targets = [version];
+    if (variantCount === 3) {
+      const room = MAX_VERSIONS - project.versions.length;
+      const copies = Math.min(3, room);
+      const created = [];
+      for (let index = 0; index < copies; index += 1) {
+        created.push(await prisma.adVersion.create({
+          data: {
+            projectId: project.id,
+            position: project.versions.length + index,
+            headline: version.headline,
+            sub: version.sub,
+            primary: version.primary,
+            cta: version.cta,
+            layout: version.layout,
+            bg: version.bg,
+            size: version.size,
+            c1: version.c1,
+            c2: version.c2,
+            c3: version.c3,
+            imageUrl: version.imageUrl,
+            imageZoom: version.imageZoom,
+            imageFocusX: version.imageFocusX,
+            imageFocusY: version.imageFocusY,
+            imageFinish: version.imageFinish ?? {},
+            logoAssetId: version.logoAssetId,
+            fontAssetId: version.fontAssetId,
+            logoX: version.logoX,
+            logoY: version.logoY,
+            headlineX: version.headlineX,
+            headlineY: version.headlineY,
+            subX: version.subX,
+            subY: version.subY,
+            ctaX: version.ctaX,
+            ctaY: version.ctaY,
+            showLogo: version.showLogo,
+            showHeadline: version.showHeadline,
+            showSub: version.showSub,
+            showCta: version.showCta,
+            headlineBold: version.headlineBold,
+            headlineItalic: version.headlineItalic,
+            headlineScale: version.headlineScale,
+            headlineTrack: version.headlineTrack,
+            headlineLead: version.headlineLead,
+            subBold: version.subBold,
+            subItalic: version.subItalic,
+            subScale: version.subScale,
+            subTrack: version.subTrack,
+            subLead: version.subLead,
+            ctaBold: version.ctaBold,
+            ctaItalic: version.ctaItalic,
+            ctaScale: version.ctaScale,
+            ctaTrack: version.ctaTrack,
+            ctaLead: version.ctaLead,
+          },
+        }));
+      }
+      if (created.length > 0) targets = created;
+    } else if (Array.isArray(body.versionIds)) {
+      const ids = body.versionIds.filter((item): item is string => typeof item === 'string' && isId(item));
+      const picked = project.versions.filter((item) => ids.includes(item.id));
+      if (picked.length > 0) targets = picked;
+    }
     if (body.stream === true) {
       return streamGeneration({
-        intro: `Updating the picture on Version ${String.fromCharCode(65 + version.position)}.${editPrompt ? `\nChange asked for: ${editPrompt}` : ''}`,
-        versions: [version],
+        intro: targets.length > 1
+          ? `Making ${targets.length} variations from Version ${String.fromCharCode(65 + version.position)}.`
+          : `Updating the picture on Version ${String.fromCharCode(65 + version.position)}.${editPrompt ? `\nChange asked for: ${editPrompt}` : ''}`,
+        versions: targets,
         project,
         ownerEmail: email,
         editPrompt,
+        directed,
+        referenceAssetId,
       });
     }
-    const result = await generateVersionImage({ project, version, ownerEmail: email, editPrompt });
+    const result = await generateVersionImage({ project, version: targets[0], ownerEmail: email, editPrompt, directed, referenceAssetId });
     if (!result.ok) return NextResponse.json({ error: result.error ?? 'Image generation failed.' }, { status: 502 });
   } else if (mode === 'refresh') {
     const cfg = falConfigError();
@@ -271,6 +341,8 @@ function streamGeneration(opts: {
   project: Parameters<typeof generateVersionImage>[0]['project'];
   ownerEmail: string;
   editPrompt?: string;
+  directed?: boolean;
+  referenceAssetId?: string | null;
 }): Response {
   const encoder = new TextEncoder();
   return new Response(new ReadableStream({
@@ -313,11 +385,15 @@ function streamGeneration(opts: {
             ? `${project.imageModel} at ${project.imageResolution} is drawing the picture.`
             : `${project.imageModel} at ${project.imageResolution} is drawing each version.`,
         );
-        const results = await Promise.all(opts.versions.map((version) => generateVersionImage({
+        const results = await Promise.all(opts.versions.map((version, index) => generateVersionImage({
           project,
           version,
           ownerEmail: opts.ownerEmail,
-          editPrompt: opts.editPrompt,
+          editPrompt: opts.versions.length > 1 && opts.editPrompt
+            ? `${opts.editPrompt}\nThis is variation ${index + 1} of ${opts.versions.length}. Keep the same subject and product, and make the treatment distinct.`
+            : opts.editPrompt,
+          directed: opts.directed,
+          referenceAssetId: opts.referenceAssetId,
           onThought: emit,
         })));
         const failed = results.find((item) => !item.ok);

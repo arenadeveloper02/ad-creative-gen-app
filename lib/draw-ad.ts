@@ -1,4 +1,5 @@
 import { readTextStyle, type TextBox } from '@/lib/ad-layout';
+import { finishChangesPhoto, paintFinishedPhoto } from '@/lib/image-finish';
 import { fitInside, logoSlot, type ZoneRect } from '@/lib/ad-zones';
 import type { Layout } from '@/lib/platforms';
 import type { VersionDTO } from '@/lib/types';
@@ -214,7 +215,8 @@ export function drawAd(
 
   // Backdrop.
   if (hasImage) {
-    coverImage(ctx, image, width, height, imageZoom, focusX, focusY);
+    if (finishChangesPhoto(version.imageFinish)) paintFinishedPhoto(ctx, image, width, height, version);
+    else coverImage(ctx, image, width, height, imageZoom, focusX, focusY);
     if (bg === 'gradient') {
       const tint = layout === 'bottom'
         ? ctx.createLinearGradient(0, height * 0.3, 0, height)

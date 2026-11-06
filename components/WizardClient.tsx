@@ -341,6 +341,45 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     return { project: nextProject, error: streamError };
   }
 
+  function patchMany(versions: VersionDTO[]) {
+    if (!projectRef.current) return;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    pendingVersion.current = null;
+    const projectId = projectRef.current.id;
+    setProject((current) => {
+      if (!current) return current;
+      const map = new Map(versions.map((item) => [item.id, item]));
+      const next = { ...current, versions: current.versions.map((item) => map.get(item.id) ?? item) };
+      projectRef.current = next;
+      return next;
+    });
+    for (const version of versions) {
+      void fetch(`/api/projects/${projectId}/versions/${version.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(version),
+      });
+    }
+  }
+
+  async function undoImage(versionId: string) {
+    const current = projectRef.current;
+    if (!current) return;
+    setError(null);
+    const res = await fetch(`/api/projects/${current.id}/versions/${versionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ undoImage: true }),
+    });
+    const parsed = await readJson(res);
+    if (!parsed.ok || !isProject(parsed.data)) {
+      setError(parsed.ok ? 'Could not restore the photo.' : parsed.error);
+      return;
+    }
+    projectRef.current = parsed.data;
+    setProject(parsed.data);
+  }
+
   function queuePatch(version: VersionDTO) {
     if (!project) return;
     pendingVersion.current = version;
@@ -447,8 +486,18 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
           thoughts={thoughts}
           error={error}
           onPatch={queuePatch}
+          onPatchMany={patchMany}
           onAdd={(count) => void mutate(`/api/projects/${project.id}/generate`, 'POST', { mode: 'append', count })}
-          onImage={(id, editPrompt) => void mutateWithThoughts({ mode: 'image', versionId: id, editPrompt })}
+          onImage={(id, editPrompt, extra) => void mutateWithThoughts({
+            mode: 'image',
+            versionId: id,
+            editPrompt,
+            directed: extra?.directed === true,
+            referenceAssetId: extra?.referenceAssetId,
+            variantCount: extra?.variantCount,
+            versionIds: extra?.versionIds,
+          })}
+          onUndoImage={(id) => void undoImage(id)}
           onDelete={() => {
             void (async () => {
               setError(null);

@@ -90,6 +90,9 @@ export async function generateVersionImage(opts: {
   version: Pick<AdVersion, 'id' | 'position' | 'layout' | 'size' | 'c1' | 'c2' | 'c3' | 'imageUrl'>;
   ownerEmail: string;
   editPrompt?: string;
+  /** Photo tools send the full instruction. The prompt under the ad stays a small change. */
+  directed?: boolean;
+  referenceAssetId?: string | null;
   onThought?: (text: string) => void;
 }): Promise<GenerateImageResult> {
   const { project, version } = opts;
@@ -102,14 +105,29 @@ export async function generateVersionImage(opts: {
     if (!version.imageUrl || !/^https:\/\//i.test(version.imageUrl)) {
       return { ok: false, imageUrl: null, prompt: change, error: 'This version has no image to edit yet.' };
     }
-    const prompt = [
-      'Edit the attached advertising image.',
-      `Change only this: ${change}`,
-      'Keep the same people, product, colours, and framing.',
-      'Do not add any words, letters, captions, logos, or watermarks.',
-    ].join('\n');
+    const prompt = opts.directed
+      ? [
+        'Edit the attached advertising image.',
+        change,
+        'Do not add any words, letters, captions, logos, or watermarks.',
+      ].join('\n')
+      : [
+        'Edit the attached advertising image.',
+        `Change only this: ${change}`,
+        'Keep the same people, product, colours, and framing.',
+        'Do not add any words, letters, captions, logos, or watermarks.',
+      ].join('\n');
     note(`${label}: editing this image only with ${modelLabel(model)} at ${resolution}. ${change}`);
-    const job = buildImageJob({ prompt, size: version.size, model, resolution, referenceImageUrls: [version.imageUrl] });
+    await prisma.adVersion.update({
+      where: { id: version.id },
+      data: { imagePrevUrl: version.imageUrl },
+    });
+    const refs = [version.imageUrl];
+    if (opts.referenceAssetId) {
+      const extra = await uploadAssetToFal(opts.referenceAssetId);
+      if (extra) refs.push(extra);
+    }
+    const job = buildImageJob({ prompt, size: version.size, model, resolution, referenceImageUrls: refs });
     const run = await runFalJob(job.endpoint, job.input, 180000, (update) => {
       if (update.logs.length > 0) note(`${label}: ${update.logs.join(' ')}`);
       else if (update.status) note(`${label}: Fal is ${update.status.toLowerCase().replace(/_/g, ' ')}.`);

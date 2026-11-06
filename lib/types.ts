@@ -27,6 +27,20 @@ export interface AssetDTO {
   size: number;
 }
 
+export interface ImageFinish {
+  exposure: number;
+  contrast: number;
+  warmth: number;
+  saturation: number;
+  shadows: number;
+  highlights: number;
+  sharpness: number;
+  blur: number;
+  rotate: 0 | 90 | 180 | 270;
+  flipH: boolean;
+  flipV: boolean;
+}
+
 export interface VersionDTO {
   id: string;
   position: number;
@@ -56,6 +70,8 @@ export interface VersionDTO {
   imageZoom: number;
   imageFocusX: number | null;
   imageFocusY: number | null;
+  imageFinish: ImageFinish;
+  imagePrevUrl: string | null;
   showLogo: boolean;
   showHeadline: boolean;
   showSub: boolean;

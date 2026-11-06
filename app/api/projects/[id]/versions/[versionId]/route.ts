@@ -21,7 +21,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!version) return NextResponse.json({ error: 'Version not found.' }, { status: 404 });
   const body: unknown = await req.json().catch(() => null);
   if (!isRecord(body)) return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
-  await prisma.adVersion.update({ where: { id: version.id }, data: parseVersionPatch(body) });
+  if (body.undoImage === true) {
+    const previous = typeof version.imagePrevUrl === 'string' && /^https:\/\//i.test(version.imagePrevUrl) ? version.imagePrevUrl : null;
+    if (!previous) return NextResponse.json({ error: 'There is no previous photo to restore.' }, { status: 400 });
+    await prisma.adVersion.update({
+      where: { id: version.id },
+      data: { imageUrl: previous, imagePrevUrl: null, imageError: null },
+    });
+  } else {
+    const { imageFinish, ...rest } = parseVersionPatch(body);
+    await prisma.adVersion.update({
+      where: { id: version.id },
+      data: {
+        ...rest,
+        ...(imageFinish ? { imageFinish: { ...imageFinish } } : {}),
+      },
+    });
+  }
   const project = await prisma.adProject.findFirst({ where: { id, ownerEmail: email }, include: projectInclude });
   if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
   return NextResponse.json(serializeProject(project));

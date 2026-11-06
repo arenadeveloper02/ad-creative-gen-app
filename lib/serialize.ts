@@ -1,5 +1,6 @@
 import type { AdAsset, AdProject, AdVersion, BrandProfile } from '@prisma/client';
 import { parseRenderAssetIds } from '@/lib/guard';
+import { readImageFinish } from '@/lib/image-finish';
 import type { AssetDTO, ProfileDTO, ProjectDTO, ProjectListItem, VersionDTO } from '@/lib/types';
 import type { Background, CopySource, Layout } from '@/lib/platforms';
 
@@ -50,6 +51,8 @@ function versionDTO(row: AdVersion): VersionDTO {
     imageZoom: typeof row.imageZoom === 'number' && Number.isFinite(row.imageZoom) ? row.imageZoom : 1,
     imageFocusX: row.imageFocusX ?? null,
     imageFocusY: row.imageFocusY ?? null,
+    imageFinish: readImageFinish(row.imageFinish),
+    imagePrevUrl: typeof row.imagePrevUrl === 'string' && /^https:\/\//i.test(row.imagePrevUrl) ? row.imagePrevUrl : null,
     showLogo: row.showLogo !== false,
     showHeadline: row.showHeadline,
     showSub: row.showSub,
