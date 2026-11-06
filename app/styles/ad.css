@@ -87,19 +87,11 @@
 .model-row { margin-top: 16px; }
 .platform-footer { margin-top: 22px; }
 .platform-generate {
-  min-width: 188px;
-  padding: 14px 28px;
-  font-size: 15px;
-  font-weight: 700;
   background: linear-gradient(135deg, var(--aurora-c3), var(--aurora-c2));
   box-shadow: 0 14px 34px -12px rgba(var(--aurora-glow2), 0.65);
 }
 .platform-generate:hover {
   box-shadow: 0 20px 42px -12px rgba(var(--aurora-glow2), 0.8);
-}
-.wizard-fit .platform-generate {
-  padding: 12px 26px;
-  font-size: 14px;
 }
 .preview-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 24px;
@@ -149,7 +141,7 @@
   align-self: center; min-width: 0; padding: 0; border: 0; background: transparent;
 }
 .gen-rail-more .gen-add-version {
-  white-space: nowrap; padding: 10px 16px; font-weight: 700;
+  white-space: nowrap;
 }
 .gen-rail-hint { margin: 0; }
 .gen-focus-card {
@@ -265,7 +257,6 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
 .gen-delete-row .hint { margin: 0; }
 .gen-delete {
   width: 100%; justify-content: center;
-  min-height: 48px; padding: 14px 22px; font-size: 14px; font-weight: 700;
 }
 .gen-delete-modal {
   position: fixed; inset: 0; z-index: 40;
