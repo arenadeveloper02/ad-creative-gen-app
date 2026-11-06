@@ -1070,32 +1070,6 @@ function SideInspector({
           );
         })}
       </div>
-      {fonts.length > 0 && (
-        <div className="gen-font-picker">
-          <span className="text-edit-pop-label">Brand font</span>
-          <p className="hint">From Brief — change it here for this ad.</p>
-          <div className="gen-tool-chips" role="listbox" aria-label="Brand fonts">
-            {fonts.map((item) => {
-              const on = activeFontId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="option"
-                  aria-selected={on}
-                  className={`gen-tool-chip gen-font-chip${on ? ' on' : ''}`}
-                  disabled={!item.ready}
-                  title={item.ready ? item.name : `Loading ${item.name}`}
-                  style={item.ready ? { fontFamily: `"${fontFamilyName(item.id)}", Arial, sans-serif` } : undefined}
-                  onClick={() => onPickFont(item.id)}
-                >
-                  {item.name.replace(/^Primary - /i, '').slice(0, 22) || 'Font'}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -1165,6 +1139,24 @@ function SideInspector({
           <button type="button" className="btn ghost sm" disabled={!visible} onClick={() => onToggle(selected, false)}>Hide</button>
           <button type="button" className="btn ghost sm" disabled={visible} onClick={() => onSelectLayer(selected)}>Show</button>
         </div>
+        {fonts.length > 0 && (
+          <>
+            <label htmlFor={`font-${selected}`}>Font</label>
+            <select
+              id={`font-${selected}`}
+              value={activeFontId ?? ''}
+              onChange={(e) => {
+                if (e.target.value) onPickFont(e.target.value);
+              }}
+            >
+              {fonts.map((item) => (
+                <option key={item.id} value={item.id} disabled={!item.ready}>
+                  {item.ready ? item.name.replace(/^Primary - /i, '') : `${item.name.replace(/^Primary - /i, '')} (loading)`}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <div className="text-edit-pop-section">
           <span className="text-edit-pop-section-label">Weight &amp; style</span>
           <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
