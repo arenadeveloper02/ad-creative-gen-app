@@ -599,7 +599,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
 
               <div className="gen-secondary">
-                <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
+                <button type="button" className="btn sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
                   Download all versions
                 </button>
               </div>
