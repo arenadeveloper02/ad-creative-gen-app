@@ -572,10 +572,74 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <p className="hint gen-focus-status">
                   {extraPending(active)
                     ? 'Still drawing this version…'
-                    : `${imageState(active)}. Drag text or the logo to move it. Type settings open on the right.`}
+                    : `${imageState(active)}. Drag text or the logo to move it. Image and type settings open on the right.`}
                 </p>
+              </div>
+
+              <div className="gen-secondary">
+                <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
+                  Download all versions
+                </button>
+              </div>
+              {!allReady && <p className="hint">Download all opens after every image has finished.</p>}
+              {zipNote && <p className="hint">{zipNote}</p>}
+              <details className="gen-meta-card">
+                <summary>Primary text &amp; details</summary>
+                <p>{active.primary}</p>
+                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel} · {project.imageResolution}</p>
+                {active.imagePrompt && (
+                  <details style={{ marginTop: 8 }}>
+                    <summary className="hint" style={{ cursor: 'pointer' }}>Image prompt sent to fal.ai</summary>
+                    <pre className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{active.imagePrompt}</pre>
+                  </details>
+                )}
+              </details>
+            </div>
+
+            <div className="gen-side">
+              {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
+              <SideInspector
+                version={active}
+                selected={textEdit?.versionId === active.id ? textEdit.kind : null}
+                logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
+                fonts={fonts.map((item) => ({ id: item.id, name: item.name, ready: fontReadyIds[item.id] === true }))}
+                activeLogoId={activeLogoId}
+                activeFontId={activeFontId}
+                onPickFont={(id) => patch({ fontAssetId: id })}
+                onSelectLayer={(kind) => {
+                  const next: Partial<VersionDTO> = {};
+                  if (kind === 'headline') {
+                    next.showHeadline = true;
+                    if (!active.headline.trim()) next.headline = project.headline.trim() || 'Your headline';
+                  } else if (kind === 'sub') {
+                    next.showSub = true;
+                    if (!active.sub.trim()) next.sub = project.subline.trim() || 'Supporting line';
+                  } else if (kind === 'cta') {
+                    next.showCta = true;
+                    if (!active.cta.trim()) next.cta = project.cta.trim() || 'Learn more';
+                  } else {
+                    next.showLogo = true;
+                  }
+                  patch(next);
+                  setTextEdit({ versionId: active.id, kind });
+                }}
+                onText={(kind, value) => patch(textValuePatch(kind, value))}
+                onStyle={(kind, style) => patch(stylePatch(kind, style))}
+                onPickLogo={(id) => {
+                  patch({ logoAssetId: id, showLogo: true });
+                }}
+                onCancelLogo={() => patch({ showLogo: false })}
+                onDone={() => setTextEdit(null)}
+                onToggle={(kind, show) => {
+                  if (kind === 'headline') patch({ showHeadline: show });
+                  if (kind === 'sub') patch({ showSub: show });
+                  if (kind === 'cta') patch({ showCta: show });
+                  if (kind === 'logo') patch({ showLogo: show });
+                }}
+              />
+              <details className="gen-meta-card gen-image-card" open>
+                <summary>Image</summary>
                 <div className="gen-image-edit">
-                  <p className="text-edit-pop-title">Image tools</p>
                   <p className="hint">Quick crop, focus, and background — live on the preview. Prompt below still redraws with AI.</p>
                   <span className="text-edit-pop-label">Crop</span>
                   <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
@@ -649,69 +713,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     {busy && !appendBusy ? 'Working…' : 'Update this image'}
                   </button>
                 </div>
-              </div>
-
-              <div className="gen-secondary">
-                <button type="button" className="btn ghost sm" disabled={busy || !allReady} onClick={() => void downloadAll()}>
-                  Download all versions
-                </button>
-              </div>
-              {!allReady && <p className="hint">Download all opens after every image has finished.</p>}
-              {zipNote && <p className="hint">{zipNote}</p>}
-              <details className="gen-meta-card">
-                <summary>Primary text &amp; details</summary>
-                <p>{active.primary}</p>
-                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel} · {project.imageResolution}</p>
-                {active.imagePrompt && (
-                  <details style={{ marginTop: 8 }}>
-                    <summary className="hint" style={{ cursor: 'pointer' }}>Image prompt sent to fal.ai</summary>
-                    <pre className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{active.imagePrompt}</pre>
-                  </details>
-                )}
               </details>
-            </div>
-
-            <div className="gen-side">
-              {(thoughtText || thinkingNow) && <ThoughtChain text={thoughtText} thinking={thinkingNow} />}
-              <SideInspector
-                version={active}
-                selected={textEdit?.versionId === active.id ? textEdit.kind : null}
-                logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
-                fonts={fonts.map((item) => ({ id: item.id, name: item.name, ready: fontReadyIds[item.id] === true }))}
-                activeLogoId={activeLogoId}
-                activeFontId={activeFontId}
-                onPickFont={(id) => patch({ fontAssetId: id })}
-                onSelectLayer={(kind) => {
-                  const next: Partial<VersionDTO> = {};
-                  if (kind === 'headline') {
-                    next.showHeadline = true;
-                    if (!active.headline.trim()) next.headline = project.headline.trim() || 'Your headline';
-                  } else if (kind === 'sub') {
-                    next.showSub = true;
-                    if (!active.sub.trim()) next.sub = project.subline.trim() || 'Supporting line';
-                  } else if (kind === 'cta') {
-                    next.showCta = true;
-                    if (!active.cta.trim()) next.cta = project.cta.trim() || 'Learn more';
-                  } else {
-                    next.showLogo = true;
-                  }
-                  patch(next);
-                  setTextEdit({ versionId: active.id, kind });
-                }}
-                onText={(kind, value) => patch(textValuePatch(kind, value))}
-                onStyle={(kind, style) => patch(stylePatch(kind, style))}
-                onPickLogo={(id) => {
-                  patch({ logoAssetId: id, showLogo: true });
-                }}
-                onCancelLogo={() => patch({ showLogo: false })}
-                onDone={() => setTextEdit(null)}
-                onToggle={(kind, show) => {
-                  if (kind === 'headline') patch({ showHeadline: show });
-                  if (kind === 'sub') patch({ showSub: show });
-                  if (kind === 'cta') patch({ showCta: show });
-                  if (kind === 'logo') patch({ showLogo: show });
-                }}
-              />
               <details className="gen-meta-card gen-more">
                 <summary>Layout, colors &amp; size</summary>
                 <label htmlFor="mPrimary">Primary text</label>
