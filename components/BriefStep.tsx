@@ -622,24 +622,7 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
   const brandFields = (
             <div className="brand-panel">
               <label>Brand profile</label>
-              <p className="hint">Write manually, Fill with AI, or use a saved profile.</p>
-              <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
-                <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
-                  Write manually
-                </button>
-                <span className="brand-or" aria-hidden="true">OR</span>
-                <button
-                  type="button"
-                  className={`chip${brandMode === 'existing' ? ' on' : ''}`}
-                  disabled={profiles.length === 0}
-                  onClick={chooseExisting}
-                >
-                  Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
-                </button>
-              </div>
-              {profiles.length === 0 && (
-                <p className="hint">No saved profiles yet — write one or Fill with AI.</p>
-              )}
+              <p className="hint">Add new, Fill with AI, or use a saved profile.</p>
 
               {brandMode === 'existing' && (
                 <>
@@ -859,6 +842,23 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
   return (
     <div className="wide-single">
       <div className="card">
+        <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
+          <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
+            Add new
+          </button>
+          <span className="brand-or" aria-hidden="true">OR</span>
+          <button
+            type="button"
+            className={`chip${brandMode === 'existing' ? ' on' : ''}`}
+            disabled={profiles.length === 0}
+            onClick={chooseExisting}
+          >
+            Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
+          </button>
+        </div>
+        {profiles.length === 0 && (
+          <p className="hint">No saved profiles yet — add one or Fill with AI.</p>
+        )}
         <h3>Brand profile</h3>
         <p className="sub">Profile, then assets and colors. Scroll the assets if the list is long.</p>
         {brandFields}
