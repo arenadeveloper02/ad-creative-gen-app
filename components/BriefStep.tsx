@@ -843,10 +843,6 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
     <div className="wide-single">
       <div className="card">
         <div className="chips brand-mode-chips" role="group" aria-label="Brand profile choice">
-          <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
-            Add new
-          </button>
-          <span className="brand-or" aria-hidden="true">OR</span>
           <button
             type="button"
             className={`chip${brandMode === 'existing' ? ' on' : ''}`}
@@ -854,6 +850,10 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
             onClick={chooseExisting}
           >
             Use existing{profiles.length > 0 ? ` (${profiles.length})` : ''}
+          </button>
+          <span className="brand-or" aria-hidden="true">OR</span>
+          <button type="button" className={`chip${brandMode === 'manual' ? ' on' : ''}`} onClick={chooseManual}>
+            Add new
           </button>
         </div>
         {profiles.length === 0 && (

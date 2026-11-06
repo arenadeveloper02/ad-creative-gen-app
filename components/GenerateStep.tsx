@@ -605,17 +605,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               </div>
               {!allReady && <p className="hint">Download all opens after every image has finished.</p>}
               {zipNote && <p className="hint">{zipNote}</p>}
-              <details className="gen-meta-card">
-                <summary>Primary text &amp; details</summary>
-                <p>{active.primary}</p>
-                <p className="hint">{project.platform} · {project.format} · {active.size.replace('x', '×')}px · {project.tone} · {project.visualStyle} · {project.imageModel} · {project.imageResolution}</p>
-                {active.imagePrompt && (
-                  <details style={{ marginTop: 8 }}>
-                    <summary className="hint" style={{ cursor: 'pointer' }}>Image prompt sent to fal.ai</summary>
-                    <pre className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{active.imagePrompt}</pre>
-                  </details>
-                )}
-              </details>
             </div>
 
             <div className="gen-side">
@@ -974,18 +963,6 @@ function AdStage({
           </div>
         ))}
       </div>
-      {!compact && (
-        <button
-          type="button"
-          className="logo-stage-open"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenEdit('logo');
-          }}
-        >
-          Logo
-        </button>
-      )}
     </div>
   );
 }
