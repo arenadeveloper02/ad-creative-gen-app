@@ -192,6 +192,36 @@ export default function PlatformStep({ project, saving, error, returnNote, embed
                 <input id="cta" type="text" value={cta} onChange={(e) => setCta(e.target.value)} />
               </div>
             </div>
+
+            <div className="row model-row">
+              <div>
+                <label htmlFor="imageModel">Image model</label>
+                <select id="imageModel" value={imageModel} onChange={(e) => setImageModel(canonicalImageModel(e.target.value))}>
+                  {IMAGE_MODELS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="hint">{IMAGE_MODELS.find((item) => item.value === imageModel)?.hint}</p>
+              </div>
+              <div>
+                <label htmlFor="imageResolution">Resolution</label>
+                <select
+                  id="imageResolution"
+                  value={resolutionChoices.includes(imageResolution) ? imageResolution : (resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION)}
+                  onChange={(e) => setImageResolution(canonicalImageResolution(e.target.value))}
+                  disabled={resolutionChoices.length <= 1}
+                >
+                  {(resolutionChoices.length > 1 ? IMAGE_RESOLUTIONS.filter((item) => resolutionChoices.includes(item.value)) : [{ value: '1K' as const, label: 'Fixed by model' }]).map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="hint">Default is Nano Banana Pro at 4K.</p>
+              </div>
+            </div>
           </div>
 
           <div className="platform-col">
@@ -274,36 +304,6 @@ export default function PlatformStep({ project, saving, error, returnNote, embed
                   }}
                   placeholder="e.g. No code. No bottlenecks."
                 />
-              </div>
-            </div>
-
-            <div className="row model-row">
-              <div>
-                <label htmlFor="imageModel">Image model</label>
-                <select id="imageModel" value={imageModel} onChange={(e) => setImageModel(canonicalImageModel(e.target.value))}>
-                  {IMAGE_MODELS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="hint">{IMAGE_MODELS.find((item) => item.value === imageModel)?.hint}</p>
-              </div>
-              <div>
-                <label htmlFor="imageResolution">Resolution</label>
-                <select
-                  id="imageResolution"
-                  value={resolutionChoices.includes(imageResolution) ? imageResolution : (resolutionChoices[resolutionChoices.length - 1] ?? DEFAULT_IMAGE_RESOLUTION)}
-                  onChange={(e) => setImageResolution(canonicalImageResolution(e.target.value))}
-                  disabled={resolutionChoices.length <= 1}
-                >
-                  {(resolutionChoices.length > 1 ? IMAGE_RESOLUTIONS.filter((item) => resolutionChoices.includes(item.value)) : [{ value: '1K' as const, label: 'Fixed by model' }]).map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="hint">Default is Nano Banana Pro at 4K.</p>
               </div>
             </div>
           </div>

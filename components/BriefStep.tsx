@@ -797,16 +797,18 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
                           <AssetThumb file={file} dark={split.variant === 'Reverse (white)'} />
                           {split.variant && <span className={`variant v-${split.variant.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{split.variant}</span>}
                           <span className="nm">{split.name}</span>
-                          {pickable && (
-                            <label className={`use-on-ad${onAd ? ' on' : ''}`} title="Use this file on the final ad">
-                              <input type="checkbox" checked={onAd} onChange={() => toggleRenderAsset(file)} />
-                              On ad
-                            </label>
-                          )}
-                          <span className="sz">{fmtSize(file.size)}</span>
-                          <button type="button" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
-                            ✕
-                          </button>
+                          <span className="file-actions">
+                            {pickable && (
+                              <label className={`use-on-ad${onAd ? ' on' : ''}`} title="Use this file on the final ad">
+                                <input type="checkbox" checked={onAd} onChange={() => toggleRenderAsset(file)} />
+                                On ad
+                              </label>
+                            )}
+                            <span className="sz">{fmtSize(file.size)}</span>
+                            <button type="button" className="file-remove" aria-label={`Remove ${file.name}`} onClick={() => void removeAsset(file.id)}>
+                              ✕
+                            </button>
+                          </span>
                         </li>
                       );
                     })}
