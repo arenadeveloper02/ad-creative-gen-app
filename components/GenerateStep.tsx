@@ -572,8 +572,27 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 <p className="hint gen-focus-status">
                   {extraPending(active)
                     ? 'Still drawing this version…'
-                    : `${imageState(active)}. Drag text or the logo to move it. Image and type settings open on the right.`}
+                    : `${imageState(active)}. Drag text or the logo to move it. Crop and type settings are on the right.`}
                 </p>
+                <div className="gen-image-edit">
+                  <label htmlFor={`edit-${active.id}`}>Update this image</label>
+                  <textarea
+                    id={`edit-${active.id}`}
+                    className="gen-image-edit-input"
+                    rows={2}
+                    value={edits[active.id] ?? ''}
+                    placeholder="e.g. Brighter daylight, remove the flowers"
+                    onChange={(e) => setEdits((current) => ({ ...current, [active.id]: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={busy || appendBusy || (edits[active.id] ?? '').trim() === ''}
+                    onClick={() => requestImage(active.id, edits[active.id] ?? '')}
+                  >
+                    {busy && !appendBusy ? 'Working…' : 'Update this image'}
+                  </button>
+                </div>
               </div>
 
               <div className="gen-secondary">
@@ -640,7 +659,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
               <details className="gen-meta-card gen-image-card" open>
                 <summary>Image</summary>
                 <div className="gen-image-edit">
-                  <p className="hint">Quick crop, focus, and background — live on the preview. Prompt below still redraws with AI.</p>
+                  <p className="hint">Quick crop, focus, and background — live on the preview. The prompt under the ad still redraws with AI.</p>
                   <span className="text-edit-pop-label">Crop</span>
                   <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
                     {CROP_PRESETS.map((item) => {
@@ -695,23 +714,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       );
                     })}
                   </div>
-                  <label htmlFor={`edit-${active.id}`}>Update this image</label>
-                  <textarea
-                    id={`edit-${active.id}`}
-                    className="gen-image-edit-input"
-                    rows={2}
-                    value={edits[active.id] ?? ''}
-                    placeholder="e.g. Brighter daylight, remove the flowers"
-                    onChange={(e) => setEdits((current) => ({ ...current, [active.id]: e.target.value }))}
-                  />
-                  <button
-                    type="button"
-                    className="btn sm"
-                    disabled={busy || appendBusy || (edits[active.id] ?? '').trim() === ''}
-                    onClick={() => requestImage(active.id, edits[active.id] ?? '')}
-                  >
-                    {busy && !appendBusy ? 'Working…' : 'Update this image'}
-                  </button>
                 </div>
               </details>
               <details className="gen-meta-card gen-more">
