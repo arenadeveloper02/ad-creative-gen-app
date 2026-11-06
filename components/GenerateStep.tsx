@@ -140,7 +140,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const [appendBusy, setAppendBusy] = useState(false);
   const [pendingExtra, setPendingExtra] = useState(0);
   /** Which on-ad text block is open in the left popup editor. */
-  const [textEdit, setTextEdit] = useState<{ versionId: string; kind: TextKind } | null>(null);
+  const [textEdit, setTextEdit] = useState<{ versionId: string; kind: InspectorPanel } | null>(null);
   const appendFromRef = useRef(0);
   const room = Math.max(0, MAX_VERSIONS - project.versions.length);
   const active = project.versions.find((item) => item.id === activeId) ?? project.versions[0];
@@ -558,7 +558,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     logo={logoImageFor(active)}
                     fontFamily={activeFontFamily}
                     active
-                    editingKind={textEdit?.versionId === active.id ? textEdit.kind : null}
+                    editingKind={textEdit?.versionId === active.id ? asTextKind(textEdit.kind) : null}
                     onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
                     onMove={(kind, x, y, width, height) => {
                       onPatch({ ...active, ...positionPatch(kind, x, y, width, height) });
@@ -618,6 +618,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 activeFontId={activeFontId}
                 onPickFont={(id) => patch({ fontAssetId: id })}
                 onSelectLayer={(kind) => {
+                  if (kind === 'background') {
+                    setTextEdit({ versionId: active.id, kind });
+                    return;
+                  }
                   const next: Partial<VersionDTO> = {};
                   if (kind === 'headline') {
                     next.showHeadline = true;
@@ -647,80 +651,77 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   if (kind === 'cta') patch({ showCta: show });
                   if (kind === 'logo') patch({ showLogo: show });
                 }}
+                background={(
+                  <div className="gen-inspector" role="region" aria-label="Background">
+                    <p className="text-edit-pop-title">Background</p>
+                    <p className="hint">Crop, focus, and the photo tools. The prompt under the ad still redraws with AI.</p>
+                    <span className="text-edit-pop-label">Crop</span>
+                    <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
+                      {CROP_PRESETS.map((item) => {
+                        const zoom = active.imageZoom ?? 1;
+                        const on = near(zoom, item.zoom, 0.05);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`gen-tool-chip${on ? ' on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => patch({ imageZoom: item.zoom })}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-edit-pop-label">Focus</span>
+                    <div className="gen-tool-chips" role="toolbar" aria-label="Focus">
+                      {FOCUS_PRESETS.map((item) => {
+                        const fx = active.imageFocusX ?? 0.5;
+                        const fy = active.imageFocusY ?? 0.5;
+                        const on = near(fx, item.x) && near(fy, item.y);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`gen-tool-chip${on ? ' on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => patch({ imageFocusX: item.x, imageFocusY: item.y })}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-edit-pop-label">Background</span>
+                    <div className="gen-tool-chips" role="toolbar" aria-label="Background">
+                      {BACKGROUNDS.map((item) => {
+                        const on = active.bg === item;
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            className={`gen-tool-chip${on ? ' on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => patch({ bg: item })}
+                          >
+                            {BG_LABELS[item]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <PhotoTools
+                      version={active}
+                      versions={project.versions}
+                      busy={busy || appendBusy}
+                      image={isHttpsUrl(active.imageUrl) ? imageCache.current[active.imageUrl] ?? null : null}
+                      onChange={patch}
+                      onApplyLook={onPatchMany}
+                      onUndo={() => onUndoImage(active.id)}
+                      onEdit={(edit) => requestImage(active.id, edit.prompt, edit)}
+                    />
+                  </div>
+                )}
               />
-              <details className="gen-meta-card gen-image-card" open>
-                <summary>Image</summary>
-                <div className="gen-image-edit">
-                  <p className="hint">Quick crop, focus, and background — live on the preview. The prompt under the ad still redraws with AI.</p>
-                  <span className="text-edit-pop-label">Crop</span>
-                  <div className="gen-tool-chips" role="toolbar" aria-label="Crop">
-                    {CROP_PRESETS.map((item) => {
-                      const zoom = active.imageZoom ?? 1;
-                      const on = near(zoom, item.zoom, 0.05);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`gen-tool-chip${on ? ' on' : ''}`}
-                          aria-pressed={on}
-                          onClick={() => patch({ imageZoom: item.zoom })}
-                        >
-                          {item.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="text-edit-pop-label">Focus</span>
-                  <div className="gen-tool-chips" role="toolbar" aria-label="Focus">
-                    {FOCUS_PRESETS.map((item) => {
-                      const fx = active.imageFocusX ?? 0.5;
-                      const fy = active.imageFocusY ?? 0.5;
-                      const on = near(fx, item.x) && near(fy, item.y);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`gen-tool-chip${on ? ' on' : ''}`}
-                          aria-pressed={on}
-                          onClick={() => patch({ imageFocusX: item.x, imageFocusY: item.y })}
-                        >
-                          {item.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="text-edit-pop-label">Background</span>
-                  <div className="gen-tool-chips" role="toolbar" aria-label="Background">
-                    {BACKGROUNDS.map((item) => {
-                      const on = active.bg === item;
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          className={`gen-tool-chip${on ? ' on' : ''}`}
-                          aria-pressed={on}
-                          onClick={() => patch({ bg: item })}
-                        >
-                          {BG_LABELS[item]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </details>
-              <details className="gen-meta-card">
-                <summary>Photo tools</summary>
-                <PhotoTools
-                  version={active}
-                  versions={project.versions}
-                  busy={busy || appendBusy}
-                  image={isHttpsUrl(active.imageUrl) ? imageCache.current[active.imageUrl] ?? null : null}
-                  onChange={patch}
-                  onApplyLook={onPatchMany}
-                  onUndo={() => onUndoImage(active.id)}
-                  onEdit={(edit) => requestImage(active.id, edit.prompt, edit)}
-                />
-              </details>
               <details className="gen-meta-card gen-more">
                 <summary>Layout, colors &amp; size</summary>
                 <label htmlFor="mPrimary">Primary text</label>
@@ -974,7 +975,20 @@ function shown(version: VersionDTO, kind: TextKind): boolean {
   return version.showLogo !== false;
 }
 
-const LAYER_KINDS: TextKind[] = ['headline', 'sub', 'cta', 'logo'];
+type InspectorPanel = TextKind | 'background';
+
+const INSPECTOR_PANELS: { id: InspectorPanel; label: string }[] = [
+  { id: 'headline', label: 'Headline' },
+  { id: 'sub', label: 'Subline' },
+  { id: 'cta', label: 'CTA' },
+  { id: 'logo', label: 'Logo' },
+  { id: 'background', label: 'Background' },
+];
+
+function asTextKind(kind: InspectorPanel | null | undefined): TextKind | null {
+  if (kind === 'headline' || kind === 'sub' || kind === 'cta' || kind === 'logo') return kind;
+  return null;
+}
 
 function SideInspector({
   version,
@@ -991,41 +1005,43 @@ function SideInspector({
   onCancelLogo,
   onDone,
   onToggle,
+  background,
 }: {
   version: VersionDTO;
-  selected: TextKind | null;
+  selected: InspectorPanel | null;
   logos: { id: string; name: string; url: string }[];
   fonts: { id: string; name: string; ready: boolean }[];
   activeLogoId: string | null;
   activeFontId: string | null;
   onPickFont: (id: string) => void;
-  onSelectLayer: (kind: TextKind) => void;
+  onSelectLayer: (kind: InspectorPanel) => void;
   onText: (kind: TextKind, value: string) => void;
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
   onPickLogo: (id: string) => void;
   onCancelLogo: () => void;
   onDone: () => void;
   onToggle: (kind: TextKind, show: boolean) => void;
+  background: ReactNode;
 }) {
   const layers = (
     <div className="gen-layers">
       <p className="text-edit-pop-title">On the ad</p>
-      <p className="hint">Turn a line back on, or open its settings.</p>
+      <p className="hint">Open headline, subline, CTA, logo, or the background.</p>
       <div className="gen-layer-chips" role="toolbar" aria-label="Ad layers">
-        {LAYER_KINDS.map((kind) => {
-          const visible = shown(version, kind);
-          const active = selected === kind;
+        {INSPECTOR_PANELS.map((panel) => {
+          const textKind = asTextKind(panel.id);
+          const visible = textKind ? shown(version, textKind) : true;
+          const active = selected === panel.id;
           return (
             <button
-              key={kind}
+              key={panel.id}
               type="button"
               className={`gen-layer-chip${active ? ' on' : ''}${visible ? '' : ' off'}`}
               aria-pressed={active}
-              title={visible ? `Edit ${textKindLabel(kind)}` : `Add ${textKindLabel(kind)} back`}
-              onClick={() => onSelectLayer(kind)}
+              title={textKind && !visible ? `Add ${panel.label} back` : `Edit ${panel.label}`}
+              onClick={() => onSelectLayer(panel.id)}
             >
-              <span>{textKindLabel(kind)}</span>
-              <span className="gen-layer-chip-state">{visible ? 'On' : 'Add'}</span>
+              {panel.label}
             </button>
           );
         })}
@@ -1103,6 +1119,8 @@ function SideInspector({
         </div>
       </div>
     );
+  } else if (selected === 'background') {
+    body = background;
   } else {
     const style = readTextStyle(version, selected);
     const sizeLabel = Math.round(style.scale * 100);
