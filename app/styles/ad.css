@@ -1,15 +1,31 @@
 .asset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px; }
-.asset-card { background: var(--aurora-panel-2); border: 1px solid var(--aurora-line); border-radius: 16px; padding: 12px 14px; }
+.asset-card { min-width: 0; background: var(--aurora-panel-2); border: 1px solid var(--aurora-line); border-radius: 16px; padding: 12px 14px; }
 .asset-card h4 { margin: 0 0 2px; font-size: 13px; }
 .asset-card .hint { margin-bottom: 8px; }
 .drop.over { border-color: var(--aurora-c1); color: var(--aurora-text); background: var(--aurora-glass3); }
 .filelist { list-style: none; padding: 0; margin: 8px 0 0; }
-.filelist li { display: flex; gap: 8px; align-items: center; font-size: 12px; padding: 6px 8px; border-radius: 10px; background: var(--aurora-glass3); margin-bottom: 6px; }
-.filelist .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.filelist .file-actions { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto; }
+.filelist li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 22px;
+  grid-template-areas:
+    "thumb name remove"
+    "thumb meta remove";
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--aurora-glass3);
+  margin-bottom: 6px;
+}
+.filelist .thumb { grid-area: thumb; }
+.filelist .nm { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filelist .file-meta { grid-area: meta; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .filelist .sz { color: var(--aurora-text3); white-space: nowrap; }
 .filelist button.file-remove {
-  flex: 0 0 22px; width: 22px; height: 22px; display: grid; place-items: center;
+  grid-area: remove;
+  width: 22px; height: 22px; display: grid; place-items: center; justify-self: end;
   background: none; border: 0; color: var(--aurora-bad-text); cursor: pointer; padding: 0;
   line-height: 1; font-size: 13px;
 }
