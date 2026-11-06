@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/db-push.js && next build",
+    "build": "prisma generate && node scripts/db-push.js && next build --webpack",
     "start": "next start",
     "lint": "next lint"
   },
