@@ -37,13 +37,16 @@ interface PlatformStepProps {
   saving: boolean;
   error: string | null;
   returnNote?: string | null;
+  /** Inside the brief card, under the goal. Next saves and opens brand. */
+  embedded?: boolean;
   onBack: () => void;
   onGenerate: (data: PlatformPayload) => void;
+  onNext?: (data: PlatformPayload) => void;
   onDraft: (data: PlatformPayload) => void;
   onPreview: (data: PlatformPayload) => Promise<{ ok: true; versions: { headline: string; sub: string; primary: string }[] } | { ok: false; error: string }>;
 }
 
-export default function PlatformStep({ project, saving, error, returnNote, onBack, onGenerate, onDraft, onPreview }: PlatformStepProps) {
+export default function PlatformStep({ project, saving, error, returnNote, embedded = false, onBack, onGenerate, onNext, onDraft, onPreview }: PlatformStepProps) {
   const [platform, setPlatform] = useState(project.platform);
   const formats = PLATFORMS[platform] ?? PLATFORMS['Meta (Facebook/Instagram)'];
   const [format, setFormat] = useState(formats.includes(project.format) ? project.format : formats[0]);
@@ -127,11 +130,13 @@ export default function PlatformStep({ project, saving, error, returnNote, onBac
 
   const canGenerate = !saving && !writing && (approved || headline.trim() !== '');
 
+  const shellClass = embedded ? 'platform-under-goal' : 'card';
+
   return (
-    <div className="wide-single">
-      <div className="card">
+    <div className={embedded ? 'platform-under-goal-wrap' : 'wide-single'}>
+      <div className={shellClass}>
         <h3>Where will this ad run?</h3>
-        <p className="sub">Platform, copy, and model — then generate.</p>
+        <p className="sub">{embedded ? 'Platform, copy, and model — then continue to brand.' : 'Platform, copy, and model — then generate.'}</p>
         {returnNote?.trim() ? (
           <div className="notice" role="status">
             From your last ad — change this: {returnNote.trim()}
@@ -306,24 +311,28 @@ export default function PlatformStep({ project, saving, error, returnNote, onBac
 
         {error && <div className="err" role="alert">{error}</div>}
         <div className="footer platform-footer">
-          <button type="button" className="btn ghost" onClick={onBack}>
-            Back
-          </button>
+          {!embedded && (
+            <button type="button" className="btn ghost" onClick={onBack}>
+              Back
+            </button>
+          )}
           <button
             type="button"
             className="btn platform-generate"
             disabled={!canGenerate}
             onClick={() => {
               const payload = currentPayload();
-              const useAi = approved && preview;
-              onGenerate({
+              const useAi = Boolean(approved && preview);
+              const next: PlatformPayload = {
                 ...payload,
                 copySource: useAi ? 'ai' : 'manual',
-                approvedCopy: useAi ? preview : undefined,
-              });
+                approvedCopy: useAi ? preview ?? undefined : undefined,
+              };
+              if (embedded && onNext) onNext(next);
+              else onGenerate(next);
             }}
           >
-            {saving ? 'Generating…' : 'Generate Ad'}
+            {saving ? 'Saving…' : embedded ? 'Next: brand' : 'Generate Ad'}
           </button>
         </div>
       </div>

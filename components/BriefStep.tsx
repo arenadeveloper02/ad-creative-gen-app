@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import HexColorField from '@/components/HexColorField';
 import { ASSET_KINDS, GOALS, type AssetKind } from '@/lib/platforms';
 import { readJson } from '@/lib/read-response';
@@ -48,9 +48,14 @@ interface BriefStepProps {
   profiles: ProfileDTO[];
   saving: boolean;
   error: string | null;
+  /** story = describe + goal (page 1). brand = profile, assets, colors (page 2). */
+  part: 'story' | 'brand';
   onContinue: (data: BriefPayload) => void;
   onDraft: (data: BriefPayload | null) => void;
   onProfiles: (profiles: ProfileDTO[]) => void;
+  onBack?: () => void;
+  onGenerate?: () => void;
+  children?: ReactNode;
 }
 
 type UploadResult = AssetDTO & { extracted?: AssetDTO[] };
@@ -102,7 +107,7 @@ function AssetThumb({ file, dark = false }: { file: AssetDTO; dark?: boolean }) 
   );
 }
 
-export default function BriefStep({ project, profiles, saving, error, onContinue, onDraft, onProfiles }: BriefStepProps) {
+export default function BriefStep({ project, profiles, saving, error, part, onContinue, onDraft, onProfiles, onBack, onGenerate, children }: BriefStepProps) {
   const [description, setDescription] = useState(project?.description ?? '');
   const [sceneNote, setSceneNote] = useState(project?.sceneNote ?? '');
   const [goal, setGoal] = useState(project?.goal ?? 'Awareness');
@@ -612,31 +617,7 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
     setStatusKind('ok');
   }
 
-  return (
-    <div className="wide-single">
-      <div className="card">
-        <h3>Tell us about the ad</h3>
-        <p className="sub">Product, goal, and brand — then continue to platform.</p>
-
-        <div className="brief-layout">
-          <div className="brief-col">
-            <label htmlFor="desc">Describe the ad you want</label>
-            <textarea
-              id="desc"
-              className="short"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Two founders in a glass office reviewing a sales dashboard. Clean daylight, no clutter."
-            />
-            <p className="hint">Describe the picture — colors and scene the image should follow.</p>
-
-            <label htmlFor="goal">What should this ad achieve?</label>
-            <select id="goal" value={goal} onChange={(e) => setGoal(e.target.value)}>
-              {GOALS.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-
+  const brandFields = (
             <div className="brand-panel">
               <label>Brand profile</label>
               <p className="hint">Write manually, Fill with AI, or use a saved profile.</p>
@@ -780,11 +761,12 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
 
               {status && <p className={`status-line ${statusKind}`}>{status}</p>}
             </div>
-          </div>
+  );
 
-          <div className="brief-col brief-assets">
+  const assetFields = (
+            <div className="brand-assets-scroll">
             <h4>Brand assets &amp; colors</h4>
-            <p className="hint">Upload guidelines, logos, fonts, creatives — and set hex colors.</p>
+            <p className="hint">Guidelines, logos, fonts, reference creatives, and hex colors.</p>
             <div className="asset-grid">
               {FIELDS.map((field) => (
                 <div key={field.key} className="asset-card">
@@ -839,19 +821,56 @@ export default function BriefStep({ project, profiles, saving, error, onContinue
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+            </div>
+  );
 
+  if (part === 'story') {
+    return (
+      <div className="wide-single">
+        <div className="card">
+          <h3>Tell us about the ad</h3>
+          <p className="sub">Describe it, set the goal, then choose where it runs.</p>
+          <label htmlFor="desc">Describe the ad you want</label>
+          <textarea
+            id="desc"
+            className="short"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g. Two founders in a glass office reviewing a sales dashboard. Clean daylight, no clutter."
+          />
+          <p className="hint">Describe the picture — colors and scene the image should follow.</p>
+          <label htmlFor="goal">What should this ad achieve?</label>
+          <select id="goal" value={goal} onChange={(e) => setGoal(e.target.value)}>
+            {GOALS.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+          {children}
+          {error && <div className="err" role="alert">{error}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="wide-single">
+      <div className="card">
+        <h3>Brand profile</h3>
+        <p className="sub">Profile, then assets and colors. Scroll the assets if the list is long.</p>
+        {brandFields}
+        {assetFields}
         {error && <div className="err" role="alert">{error}</div>}
         <div className="footer">
-          <span />
+          <button type="button" className="btn ghost" onClick={onBack} disabled={saving || uploading || lookingUp}>
+            Back
+          </button>
           <button
             type="button"
-            className="btn"
+            className="btn platform-generate"
             disabled={saving || uploading || lookingUp}
-            onClick={() => onContinue(draftPayload())}
+            onClick={() => onGenerate?.()}
           >
-            {saving ? 'Saving…' : 'Next: platform'}
+            {saving ? 'Generating…' : 'Generate Ad'}
           </button>
         </div>
       </div>

@@ -590,6 +590,24 @@ html.dark .gen-inspector { background: rgba(24, 22, 40, 0.98); }
   overflow: auto;
   padding-right: 4px;
 }
+.platform-under-goal {
+  margin-top: 8px;
+  padding-top: 4px;
+}
+.platform-under-goal > h3 {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--aurora-line);
+}
+.brand-assets-scroll {
+  margin-top: 12px;
+  max-height: min(46vh, 460px);
+  overflow: auto;
+  padding-right: 6px;
+}
+.brand-assets-scroll > h4 {
+  margin: 0 0 2px;
+}
 .brief-assets > h4 {
   margin: 0 0 2px;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-const STEP_LABELS = ['Brief', 'Platform', 'Generate'];
+const STEP_LABELS = ['Brief', 'Brand', 'Generate'];
 
 interface StepperProps {
   step: number;

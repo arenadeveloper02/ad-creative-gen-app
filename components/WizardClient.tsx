@@ -69,6 +69,7 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
   const pendingBrief = useRef<BriefPayload | null>(null);
   const pendingPlatform = useRef<PlatformPayload | null>(null);
   const pendingVersion = useRef<VersionDTO | null>(null);
+  const readyPlatform = useRef<PlatformPayload | null>(null);
 
   function furthest(): number {
     const current = projectRef.current;
@@ -204,6 +205,60 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
     const versions = isRecordVersions(parsed.data);
     if (!versions) return { ok: false as const, error: 'The copy model returned nothing usable. Try again.' };
     return { ok: true as const, versions };
+  }
+
+  function platformFromProject(current: ProjectDTO): PlatformPayload {
+    return {
+      platform: current.platform,
+      format: current.format,
+      audience: current.audience,
+      tone: current.tone,
+      visualStyle: current.visualStyle,
+      cta: current.cta || 'Get started',
+      copySource: current.headline.trim() ? 'manual' : current.copySource,
+      headline: current.headline,
+      subline: current.subline,
+      avoid: current.avoid,
+      copyPrompt: current.copyPrompt,
+      imageModel: current.imageModel as PlatformPayload['imageModel'],
+      imageResolution: current.imageResolution as PlatformPayload['imageResolution'],
+    };
+  }
+
+  async function goBrand(data: PlatformPayload) {
+    setSaving(true);
+    setError(null);
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    if (platformTimer.current) window.clearTimeout(platformTimer.current);
+    if (createLock.current) await createLock.current;
+    const brief = pendingBrief.current;
+    pendingBrief.current = null;
+    pendingPlatform.current = null;
+    if (brief) await writeProject(brief);
+    const saved = await writeProject(data);
+    setSaving(false);
+    if (!saved) return;
+    readyPlatform.current = data;
+    reachedRef.current = Math.max(reachedRef.current, 2);
+    setStep(2);
+  }
+
+  async function generateFromBrand() {
+    const current = projectRef.current;
+    if (!current) return;
+    setError(null);
+    if (draftTimer.current) window.clearTimeout(draftTimer.current);
+    if (createLock.current) await createLock.current;
+    const brief = pendingBrief.current;
+    pendingBrief.current = null;
+    if (brief) {
+      setSaving(true);
+      const saved = await writeProject(brief);
+      setSaving(false);
+      if (!saved) return;
+    }
+    const data = readyPlatform.current ?? platformFromProject(projectRef.current ?? current);
+    await generate(data);
   }
 
   async function generate(data: PlatformPayload) {
@@ -343,17 +398,45 @@ export default function WizardClient({ initialProject, profiles: initialProfiles
       <AgentCrumb backHref="/" />
       <Stepper step={step} canGoto={canGoto} onGoto={goto} />
       {step === 1 && (
-        <BriefStep project={project} profiles={profiles} saving={saving} error={error} onContinue={(data) => void saveBrief(data)} onDraft={queueBrief} onProfiles={setProfiles} />
-      )}
-      {step === 2 && project && (
-        <PlatformStep
+        <BriefStep
+          part="story"
           project={project}
+          profiles={profiles}
           saving={saving}
           error={error}
+          onContinue={(data) => void saveBrief(data)}
+          onDraft={queueBrief}
+          onProfiles={setProfiles}
+        >
+          {project ? (
+            <PlatformStep
+              embedded
+              project={project}
+              saving={saving}
+              error={null}
+              onBack={() => goto(1)}
+              onGenerate={() => undefined}
+              onNext={(data) => void goBrand(data)}
+              onDraft={queuePlatform}
+              onPreview={previewCopy}
+            />
+          ) : (
+            <p className="hint">Platform choices appear as soon as this brief starts saving.</p>
+          )}
+        </BriefStep>
+      )}
+      {step === 2 && project && (
+        <BriefStep
+          part="brand"
+          project={project}
+          profiles={profiles}
+          saving={saving}
+          error={error}
+          onContinue={(data) => void saveBrief(data)}
+          onDraft={queueBrief}
+          onProfiles={setProfiles}
           onBack={() => goto(1)}
-          onGenerate={(data) => void generate(data)}
-          onDraft={queuePlatform}
-          onPreview={previewCopy}
+          onGenerate={() => void generateFromBrand()}
         />
       )}
       {step === 3 && project && (
