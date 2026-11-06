@@ -12,6 +12,20 @@ function typeFace(bold: boolean, italic: boolean, sizePx: number, family?: strin
   return `${style} ${weight} ${Math.max(8, Math.round(sizePx))}px ${face}`;
 }
 
+export function sharedInk(bg: string, c1: string, c3: string): string {
+  return bg === 'light' ? c1 : c3;
+}
+
+export function sharedCtaFill(bg: string, c1: string, c3: string): string {
+  return bg === 'light' || bg === 'photo' ? c1 : c3;
+}
+
+export function sharedCtaInk(bg: string, c1: string, c3: string): string {
+  if (bg === 'light') return '#FFFFFF';
+  if (bg === 'photo') return c3;
+  return c1;
+}
+
 function applyTrack(ctx: CanvasRenderingContext2D, trackEm: number, sizePx: number): void {
   const spacing = `${Math.max(0, trackEm) * sizePx}px`;
   try {
@@ -286,9 +300,11 @@ export function drawAd(
   }
 
   // Colour roles per template.
-  const ink = bg === 'light' ? c1 : c3;
-  const ctaFill = bg === 'light' ? c1 : bg === 'photo' ? c1 : c3;
-  const ctaInk = bg === 'light' ? '#FFFFFF' : bg === 'photo' ? c3 : c1;
+  const ink = sharedInk(bg, c1, c3);
+  const ctaFill = sharedCtaFill(bg, c1, c3);
+  const ctaInk = version.ctaColor || sharedCtaInk(bg, c1, c3);
+  const headlineInk = version.headlineColor || ink;
+  const subInk = version.subColor || ink;
   const accent = c2;
 
   // Measure every visible block first so the stack is aligned from real text sizes.
@@ -445,7 +461,7 @@ export function drawAd(
   if (headSpot) {
     ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, fontFamily);
     applyTrack(ctx, headStyle.track, hSize);
-    ctx.fillStyle = ink;
+    ctx.fillStyle = headlineInk;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     let y = headSpot.y + hSize * 0.88;
@@ -460,7 +476,7 @@ export function drawAd(
   if (subSpot) {
     ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, fontFamily);
     applyTrack(ctx, subStyle.track, sSize);
-    ctx.fillStyle = ink;
+    ctx.fillStyle = subInk;
     ctx.globalAlpha = 0.92;
     ctx.textAlign = 'left';
     let y = subSpot.y + sSize * 0.9;

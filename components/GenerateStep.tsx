@@ -14,7 +14,7 @@ import {
   type TextKind,
   type TextStyle,
 } from '@/lib/ad-layout';
-import { drawAd } from '@/lib/draw-ad';
+import { drawAd, sharedCtaInk, sharedInk } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { BACKGROUNDS, SIZES, type Background } from '@/lib/platforms';
 import type { AssetDTO, ProjectDTO, VersionDTO } from '@/lib/types';
@@ -642,7 +642,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 activeFontId={activeFontId}
                 onPickFont={(id) => patch({ fontAssetId: id })}
                 onSelectLayer={(kind) => {
-                  if (kind === 'background') {
+                  if (kind === 'background' || kind === 'layout') {
                     setTextEdit({ versionId: active.id, kind });
                     return;
                   }
@@ -674,6 +674,11 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   if (kind === 'sub') patch({ showSub: show });
                   if (kind === 'cta') patch({ showCta: show });
                   if (kind === 'logo') patch({ showLogo: show });
+                }}
+                onLineColor={(kind, hex) => {
+                  if (kind === 'headline') patch({ headlineColor: hex });
+                  if (kind === 'sub') patch({ subColor: hex });
+                  if (kind === 'cta') patch({ ctaColor: hex });
                 }}
                 background={(
                   <div className="gen-inspector" role="region" aria-label="Background">
@@ -745,37 +750,32 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     />
                   </div>
                 )}
+                layout={(
+                  <div className="gen-inspector" role="region" aria-label="Layout">
+                    <p className="text-edit-pop-title">Layout</p>
+                    <label htmlFor="mPrimary">Primary text</label>
+                    <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
+                    <label htmlFor="mLayout">Layout</label>
+                    <select id="mLayout" value={active.layout} onChange={(e) => patch({ layout: e.target.value as VersionDTO['layout'] })}>
+                      <option value="left">Left aligned</option>
+                      <option value="center">Centered</option>
+                      <option value="bottom">Bottom band</option>
+                    </select>
+                    <label>Colors</label>
+                    <div className="color-fields">
+                      <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
+                      <HexColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
+                      <HexColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
+                    </div>
+                    <label htmlFor="mSize">Size</label>
+                    <select id="mSize" value={active.size} onChange={(e) => patch({ size: e.target.value })}>
+                      {SIZES.map((size) => (
+                        <option key={size} value={size}>{size.replace('x', ' × ')}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               />
-              <details className="gen-meta-card gen-more">
-                <summary>Layout, colors &amp; size</summary>
-                <label htmlFor="mPrimary">Primary text</label>
-                <textarea id="mPrimary" className="short" value={active.primary} onChange={(e) => patch({ primary: e.target.value })} />
-                <label htmlFor="mLayout">Layout</label>
-                <select id="mLayout" value={active.layout} onChange={(e) => patch({ layout: e.target.value as VersionDTO['layout'] })}>
-                  <option value="left">Left aligned</option>
-                  <option value="center">Centered</option>
-                  <option value="bottom">Bottom band</option>
-                </select>
-                <label htmlFor="mBg">Background</label>
-                <select id="mBg" value={active.bg} onChange={(e) => patch({ bg: e.target.value as VersionDTO['bg'] })}>
-                  <option value="photo">Photo</option>
-                  <option value="gradient">Brand tint</option>
-                  <option value="solid">Solid panel</option>
-                  <option value="light">Light panel</option>
-                </select>
-                <label>Colors</label>
-                <div className="color-fields">
-                  <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
-                  <HexColorField id="c2" label="C2" value={active.c2} onChange={(hex) => patch({ c2: hex })} />
-                  <HexColorField id="c3" label="C3" value={active.c3} onChange={(hex) => patch({ c3: hex })} />
-                </div>
-                <label htmlFor="mSize">Size</label>
-                <select id="mSize" value={active.size} onChange={(e) => patch({ size: e.target.value })}>
-                  {SIZES.map((size) => (
-                    <option key={size} value={size}>{size.replace('x', ' × ')}</option>
-                  ))}
-                </select>
-              </details>
 
               <div className="gen-actions">
                 <p className="gen-actions-label">Main actions</p>
@@ -999,7 +999,7 @@ function shown(version: VersionDTO, kind: TextKind): boolean {
   return version.showLogo !== false;
 }
 
-type InspectorPanel = TextKind | 'background';
+type InspectorPanel = TextKind | 'background' | 'layout';
 
 const INSPECTOR_PANELS: { id: InspectorPanel; label: string }[] = [
   { id: 'headline', label: 'Headline' },
@@ -1007,6 +1007,7 @@ const INSPECTOR_PANELS: { id: InspectorPanel; label: string }[] = [
   { id: 'cta', label: 'CTA' },
   { id: 'logo', label: 'Logo' },
   { id: 'background', label: 'Background' },
+  { id: 'layout', label: 'Layout' },
 ];
 
 function asTextKind(kind: InspectorPanel | null | undefined): TextKind | null {
@@ -1029,7 +1030,9 @@ function SideInspector({
   onCancelLogo,
   onDone,
   onToggle,
+  onLineColor,
   background,
+  layout,
 }: {
   version: VersionDTO;
   selected: InspectorPanel | null;
@@ -1045,12 +1048,14 @@ function SideInspector({
   onCancelLogo: () => void;
   onDone: () => void;
   onToggle: (kind: TextKind, show: boolean) => void;
+  onLineColor: (kind: TextKind, hex: string) => void;
   background: ReactNode;
+  layout: ReactNode;
 }) {
   const layers = (
     <div className="gen-layers">
       <p className="text-edit-pop-title">On the ad</p>
-      <p className="hint">Open headline, subline, CTA, logo, or the background.</p>
+      <p className="hint">Open a line, the logo, the background, or the layout.</p>
       <div className="gen-layer-chips" role="toolbar" aria-label="Ad layers">
         {INSPECTOR_PANELS.map((panel) => {
           const textKind = asTextKind(panel.id);
@@ -1119,6 +1124,8 @@ function SideInspector({
     );
   } else if (selected === 'background') {
     body = background;
+  } else if (selected === 'layout') {
+    body = layout;
   } else {
     const style = readTextStyle(version, selected);
     const sizeLabel = Math.round(style.scale * 100);
@@ -1157,6 +1164,18 @@ function SideInspector({
             </select>
           </>
         )}
+        <HexColorField
+          id={`color-${selected}`}
+          label="Color"
+          value={
+            selected === 'headline'
+              ? (version.headlineColor || sharedInk(version.bg, version.c1, version.c3))
+              : selected === 'sub'
+                ? (version.subColor || sharedInk(version.bg, version.c1, version.c3))
+                : (version.ctaColor || sharedCtaInk(version.bg, version.c1, version.c3))
+          }
+          onChange={(hex) => onLineColor(selected, hex)}
+        />
         <div className="text-edit-pop-section">
           <span className="text-edit-pop-section-label">Weight &amp; style</span>
           <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">

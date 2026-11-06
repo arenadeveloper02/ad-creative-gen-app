@@ -53,6 +53,9 @@ export interface VersionDTO {
   c1: string;
   c2: string;
   c3: string;
+  headlineColor: string | null;
+  subColor: string | null;
+  ctaColor: string | null;
   size: string;
   imageUrl: string | null;
   imagePrompt: string | null;

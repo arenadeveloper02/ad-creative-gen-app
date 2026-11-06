@@ -107,6 +107,10 @@ model AdVersion {
   c1        String
   c2        String
   c3        String
+  // Optional per-line text colors. Null keeps the shared C1–C3 ink for that line.
+  headlineColor String?
+  subColor      String?
+  ctaColor      String?
   size      String
   imageUrl  String?
   imagePrompt String?

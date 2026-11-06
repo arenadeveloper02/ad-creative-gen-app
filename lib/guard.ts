@@ -170,6 +170,9 @@ export interface VersionPatch {
   c1?: string;
   c2?: string;
   c3?: string;
+  headlineColor?: string;
+  subColor?: string;
+  ctaColor?: string;
   size?: string;
   headlineX?: number | null;
   headlineY?: number | null;
@@ -245,6 +248,9 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if ('c1' in body) patch.c1 = cleanHex(body.c1, '#1B365D');
   if ('c2' in body) patch.c2 = cleanHex(body.c2, '#2E6DA4');
   if ('c3' in body) patch.c3 = cleanHex(body.c3, '#FFFFFF');
+  if ('headlineColor' in body) patch.headlineColor = cleanHex(body.headlineColor, '#FFFFFF');
+  if ('subColor' in body) patch.subColor = cleanHex(body.subColor, '#FFFFFF');
+  if ('ctaColor' in body) patch.ctaColor = cleanHex(body.ctaColor, '#FFFFFF');
   if ('size' in body && typeof body.size === 'string' && (SIZES as readonly string[]).includes(body.size)) {
     patch.size = body.size;
   }
