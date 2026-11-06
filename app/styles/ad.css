@@ -258,14 +258,11 @@ html.dark .logo-edit-pop { background: rgba(24, 22, 40, 0.98); }
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--aurora-text3);
 }
 .gen-actions .btn { width: 100%; justify-content: center; }
-.gen-danger-zone {
-  display: flex; flex-direction: column; gap: 8px;
-  margin-top: 18px; padding: 14px; border-radius: 16px;
-  border: 1px solid var(--aurora-bad-line);
-  background: color-mix(in srgb, var(--aurora-bad-bg) 70%, var(--aurora-panel));
+.gen-delete-row {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 16px;
 }
-.gen-danger-zone .hint { margin: 0 0 4px; color: var(--aurora-bad-text); }
-.gen-danger-zone .gen-actions-label { color: var(--aurora-bad-text); }
+.gen-delete-row .hint { margin: 0; }
 .gen-delete {
   width: 100%; justify-content: center;
   min-height: 48px; padding: 14px 22px; font-size: 14px; font-weight: 700;

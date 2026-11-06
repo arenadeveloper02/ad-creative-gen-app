@@ -750,9 +750,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 </button>
               </div>
 
-              <div className="gen-danger-zone">
-                <p className="gen-actions-label">Danger zone</p>
-                <p className="hint">Removes this entire ad project — every version, not just the selected preview.</p>
+              <div className="gen-delete-row">
                 <button
                   type="button"
                   className="btn danger gen-delete"
@@ -764,6 +762,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 >
                   {deleting ? 'Deleting…' : 'Delete this project'}
                 </button>
+                <p className="hint">Deletes this whole ad project, including every version.</p>
               </div>
             </div>
           </div>
