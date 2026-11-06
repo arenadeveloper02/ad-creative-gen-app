@@ -79,8 +79,8 @@ const GUIDE_SYSTEM = [
   'Return only JSON with this shape:',
   '{"brandName":"","product":"","website":"","c1":"#RRGGBB","c2":"#RRGGBB","c3":"#RRGGBB","summary":"","logoUrls":[],"fontNames":[],"refUrls":[],"headlineFont":""}',
   'c1 is the primary brand colour, c2 secondary, c3 accent or light contrast for text/logo. Use real #RRGGBB values seen on the site when available; prefer distinctive brand colours over greys, pure black, or generic blue.',
-  'product is a short product or service line (under 80 characters). summary is one sentence on tone and visual style (under 240 characters).',
-  'logoUrls: up to 6 URLs from the candidates that are this brand\'s own logo in any variant (full colour, white/reverse, icon mark, stacked, mono), best first. Exclude client, partner, award, app-store and social logos, and photos. Header and footer zones are the most reliable.',
+  'product is a short product or service line (under 80 characters). When the user already named a product or service, keep product close to that wording. summary is one sentence on tone and visual style (under 240 characters).',
+  'logoUrls: up to 6 URLs from the candidates that are this brand\'s own logo in any variant (full colour, white/reverse, icon mark, stacked, mono), best first. Prefer marks for the named product or service, not a sibling product or another division. Exclude client, partner, award, app-store and social logos, and photos. Header and footer zones are the most reliable.',
   'refUrls: up to 6 candidate image URLs that are real marketing visuals / hero creatives, best first.',
   'fontNames: brand font family names seen in the CSS, primary first. headlineFont is the single best headline font name.',
   'Only use URLs that appear in the candidates. Do not invent prices, awards, or customer counts.',
@@ -368,8 +368,9 @@ async function fetchBinary(url: string, accept: string, maxBytes: number): Promi
 
 // ----------------------------------------------------------- site discovery
 
-async function askSite(brandName: string): Promise<string | null> {
-  const run = await runFalJob(LLM_ENDPOINT, buildLlmInput(SITE_SYSTEM, `Brand: ${brandName}\nReturn its official website.`), 30000);
+async function askSite(brandName: string, product = ''): Promise<string | null> {
+  const productLine = product ? `\nProduct or service: ${product}` : '';
+  const run = await runFalJob(LLM_ENDPOINT, buildLlmInput(SITE_SYSTEM, `Brand: ${brandName}${productLine}\nReturn the official website for this brand and this product.`), 30000);
   if (!run.ok) return null;
   const text = findOutput(run.output);
   const parsed = text ? parseJsonObject(text) : null;
@@ -378,8 +379,8 @@ async function askSite(brandName: string): Promise<string | null> {
   return site;
 }
 
-async function searchSite(brandName: string): Promise<string | null> {
-  const query = encodeURIComponent(`${brandName} official website`);
+async function searchSite(brandName: string, product = ''): Promise<string | null> {
+  const query = encodeURIComponent(`${brandName}${product ? ` ${product}` : ''} official website`);
   const page = await fetchText(`https://html.duckduckgo.com/html/?q=${query}`, 'text/html', MAX_HTML);
   if (!page.ok) return null;
   const re = /<a\b[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"/gi;
@@ -661,8 +662,9 @@ async function readSite(site: string, brandName: string): Promise<Hunt | null> {
 
 // ------------------------------------------------------------ AI synthesis
 
-function buildPrompt(brandName: string, hunt: Hunt | null, site: string | null): string {
+function buildPrompt(brandName: string, hunt: Hunt | null, site: string | null, product = ''): string {
   const lines = [`Brand the user typed: ${brandName}`];
+  if (product) lines.push(`Product or service the user typed: ${product}. Choose logos, colours, fonts, and marketing images for this product, not a different product from the same company.`);
   if (!hunt) {
     lines.push(site ? `Official website (could not be read): ${site}` : 'No website could be found or read.');
     lines.push('Use well-known public brand colours for this company if confident, otherwise sensible professional defaults. Leave logoUrls, refUrls, fontNames empty.');
@@ -885,19 +887,22 @@ function dedupeParts(parts: BrandAssetPart[]): BrandAssetPart[] {
 /** Full brand hunt from a name (and optional site). AI via fal any-llm; downloads logos, fonts, creatives, brand kit. Never throws. */
 export async function lookupBrandGuidelines(opts: {
   brandName: string;
+  product?: string;
   website?: string | null;
   ownerEmail: string;
   projectId?: string | null;
 }): Promise<{ ok: true; result: BrandGuidelinesResult } | { ok: false; error: string }> {
   const brandName = cleanText(opts.brandName, MAX_SHORT);
   if (brandName.length < 2) return { ok: false, error: 'Enter a brand name first.' };
+  const productHint = cleanText(opts.product ?? '', MAX_SHORT);
+  if (productHint.length < 2) return { ok: false, error: 'Enter the product or service as well.' };
 
   // 1. Official site.
   const siteQueue: string[] = [];
   const given = opts.website ? cleanHttpUrl(opts.website) : null;
   if (given) siteQueue.push(given);
   if (!given) {
-    const [fromAi, fromSearch] = await Promise.all([askSite(brandName), searchSite(brandName)]);
+    const [fromAi, fromSearch] = await Promise.all([askSite(brandName, productHint), searchSite(brandName, productHint)]);
     pushUnique(siteQueue, fromAi);
     for (const guess of slugCandidates(brandName)) pushUnique(siteQueue, guess);
     pushUnique(siteQueue, fromSearch);
@@ -916,7 +921,7 @@ export async function lookupBrandGuidelines(opts: {
   }
 
   // 4. Gemini turns the hunt into guidelines.
-  const run = await runFalJob(LLM_ENDPOINT, buildLlmInput(GUIDE_SYSTEM, buildPrompt(brandName, hunt, site ?? siteQueue[0] ?? null)), 60000);
+  const run = await runFalJob(LLM_ENDPOINT, buildLlmInput(GUIDE_SYSTEM, buildPrompt(brandName, hunt, site ?? siteQueue[0] ?? null, productHint)), 60000);
   if (!run.ok) return { ok: false, error: run.error ?? 'The brand model failed.' };
   const text = findOutput(run.output);
   const parsed = text ? parseJsonObject(text) : null;
@@ -933,7 +938,7 @@ export async function lookupBrandGuidelines(opts: {
   if (run.requestId) await reportFalUsage({ email: opts.ownerEmail, endpointId: run.endpointId, requestId: run.requestId });
 
   const resolvedName = clip(parsed.brandName, MAX_SHORT) || brandName;
-  const product = clip(parsed.product, MAX_SHORT);
+  const product = productHint || clip(parsed.product, MAX_SHORT);
   const website = cleanHttpUrl(parsed.website) ?? site ?? given ?? '';
   const c1 = cleanHex(parsed.c1, hunt?.colors[0] ?? DEFAULT_C1);
   const c2 = cleanHex(parsed.c2, hunt?.colors[1] ?? DEFAULT_C2);

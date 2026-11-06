@@ -17,6 +17,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const brandName = cleanText(body.brandName, MAX_SHORT);
   if (brandName.length < 2) return NextResponse.json({ error: 'Enter a brand name first.' }, { status: 400 });
+  const product = cleanText(body.product, MAX_SHORT);
+  if (product.length < 2) return NextResponse.json({ error: 'Enter the product or service as well.' }, { status: 400 });
 
   const websiteRaw = typeof body.website === 'string' ? body.website.trim() : '';
   const website = websiteRaw === '' ? null : cleanHttpUrl(websiteRaw.startsWith('http') ? websiteRaw : `https://${websiteRaw}`);
@@ -44,6 +46,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const looked = await lookupBrandGuidelines({
     brandName,
+    product,
     website,
     ownerEmail: email,
     projectId,

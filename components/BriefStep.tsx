@@ -213,7 +213,7 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
       setStatus('Your brand profile is back as you left it.');
       return;
     }
-    setStatus('Enter the brand name, then Fill with AI — or upload files yourself. Save the profile to reuse it.');
+    setStatus('Enter the brand and the product or service, then Fill with AI — or upload files yourself. Save the profile to reuse it.');
     setProfileId('__new__');
     setAssets([]);
     setRenderAssetIds([]);
@@ -269,12 +269,13 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
 
   async function fillBrandWithAi(force = false) {
     const name = brandName.trim();
-    if (name.length < 2) {
-      setStatus('Enter a brand name first.');
+    const productLine = product.trim();
+    if (name.length < 2 || productLine.length < 2) {
+      setStatus('Enter the brand name and the product or service first.');
       setStatusKind('err');
       return;
     }
-    const key = `${name.toLowerCase()}|${website.trim().toLowerCase()}`;
+    const key = `${name.toLowerCase()}|${productLine.toLowerCase()}|${website.trim().toLowerCase()}`;
     if (!force && key === lastLookupKey.current) return;
 
     const ticket = lookupAbort.current + 1;
@@ -292,6 +293,7 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brandName: name,
+        product: productLine,
         website: website.trim(),
         // Leave files unassigned; linking to the project here raced with draft sync and deleted them.
         projectId: undefined,
@@ -682,7 +684,7 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && isNew) {
                         e.preventDefault();
-                        if (brandName.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
+                        if (brandName.trim().length >= 2 && product.trim().length >= 2 && !lookingUp && !uploading) void fillBrandWithAi(true);
                       }
                     }}
                     placeholder="e.g. Gentle Dental"
@@ -710,7 +712,7 @@ export default function BriefStep({ project, profiles, saving, error, part, onCo
                   <button
                     type="button"
                     className="btn sm"
-                    disabled={lookingUp || uploading || brandName.trim().length < 2}
+                    disabled={lookingUp || uploading || brandName.trim().length < 2 || product.trim().length < 2}
                     onClick={() => void fillBrandWithAi(true)}
                   >
                     {lookingUp ? 'Filling…' : 'Fill with AI'}
