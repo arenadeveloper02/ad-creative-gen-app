@@ -69,6 +69,7 @@ export interface VersionDTO {
   logoX: number | null;
   logoY: number | null;
   logoAssetId: string | null;
+  logoScale: number;
   fontAssetId: string | null;
   imageZoom: number;
   imageFocusX: number | null;
@@ -79,6 +80,8 @@ export interface VersionDTO {
   showHeadline: boolean;
   showSub: boolean;
   showCta: boolean;
+  showBrand: boolean;
+  brandScale: number;
   headlineBold: boolean;
   headlineItalic: boolean;
   headlineScale: number;

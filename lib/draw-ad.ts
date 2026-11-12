@@ -284,14 +284,19 @@ export function drawAd(
   let logoBox: ZoneRect | null = null;
   if (logo) {
     const fitted = fitInside(slot, logo.naturalWidth, logo.naturalHeight);
-    if (fitted.w > 0 && fitted.h > 0) {
+    const logoScale = typeof version.logoScale === 'number' && Number.isFinite(version.logoScale)
+      ? Math.min(1.6, Math.max(0.7, version.logoScale))
+      : 1;
+    const lw = fitted.w * logoScale;
+    const lh = fitted.h * logoScale;
+    if (lw > 0 && lh > 0) {
       const x = version.logoX != null
-        ? Math.min(width - fitted.w, Math.max(0, version.logoX * width))
-        : fitted.x;
+        ? Math.min(width - lw, Math.max(0, version.logoX * width))
+        : fitted.x + (fitted.w - lw) / 2;
       const y = version.logoY != null
-        ? Math.min(height - fitted.h, Math.max(0, version.logoY * height))
-        : fitted.y;
-      logoBox = { x, y, w: fitted.w, h: fitted.h };
+        ? Math.min(height - lh, Math.max(0, version.logoY * height))
+        : fitted.y + (fitted.h - lh) / 2;
+      logoBox = { x, y, w: lw, h: lh };
       ctx.save();
       ctx.globalAlpha = 1;
       ctx.drawImage(logo, logoBox.x, logoBox.y, logoBox.w, logoBox.h);
@@ -388,13 +393,18 @@ export function drawAd(
   if (subSpot) boxes.push({ kind: 'sub', x: subSpot.x, y: subSpot.y, w: sW, h: sH });
   if (ctaSpot) boxes.push({ kind: 'cta', x: ctaSpot.x, y: ctaSpot.y, w: ctaW, h: ctaH });
 
-  // Brand label in the top-left is a fixed obstacle; logo slot is too when present.
-  const labelSize = Math.round(width * 0.032);
+  // Brand label in the top-left is a fixed obstacle when shown; logo slot is too when present.
+  const showBrand = version.showBrand !== false;
+  const brandScale = typeof version.brandScale === 'number' && Number.isFinite(version.brandScale)
+    ? Math.min(1.6, Math.max(0.7, version.brandScale))
+    : 1;
+  const labelSize = Math.round(width * 0.032 * brandScale);
   const labelFont = fontFamily ? typeFace(true, false, labelSize, fontFamily) : `600 ${labelSize}px Arial`;
   ctx.font = labelFont;
   const labelText = (brand || 'Your brand').toUpperCase().slice(0, 40);
   const labelBox: ZoneRect = { x: pad, y: pad - labelSize * 0.2, w: ctx.measureText(labelText).width, h: labelSize * 1.4 };
-  const fixed: ZoneRect[] = [labelBox];
+  const fixed: ZoneRect[] = [];
+  if (showBrand) fixed.push(labelBox);
   if (logoBox) fixed.push(logoBox);
 
   const collideGap = Math.round(width * 0.02);
@@ -441,11 +451,13 @@ export function drawAd(
   }
 
   // Brand label.
-  ctx.fillStyle = bg === 'light' && hasImage ? '#FFFFFF' : ink;
-  ctx.font = labelFont;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText((brand || 'Your brand').toUpperCase().slice(0, 40), pad, pad + Math.round(width * 0.03));
+  if (showBrand) {
+    ctx.fillStyle = bg === 'light' && hasImage ? '#FFFFFF' : ink;
+    ctx.font = labelFont;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(labelText, pad, pad + Math.round(width * 0.03 * brandScale));
+  }
 
   // Accent bar above the first block uses c2.
   const first = boxes[0];

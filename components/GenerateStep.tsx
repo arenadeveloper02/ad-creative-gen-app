@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import HexColorField from '@/components/HexColorField';
 import PhotoTools, { type PhotoEdit } from '@/components/PhotoTools';
 import {
+  clampTextScale,
   positionPatch,
   readTextStyle,
   readTextValue,
@@ -668,6 +669,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   patch({ logoAssetId: id, showLogo: true });
                 }}
                 onCancelLogo={() => patch({ showLogo: false })}
+                onLogoScale={(scale) => patch({ logoScale: clampTextScale(scale) })}
                 onDone={() => setTextEdit(null)}
                 onToggle={(kind, show) => {
                   if (kind === 'headline') patch({ showHeadline: show });
@@ -757,6 +759,36 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       <option value="center">Centered</option>
                       <option value="bottom">Bottom band</option>
                     </select>
+                    <span className="text-edit-pop-label">Brand name</span>
+                    <p className="hint">The client name in the top-left of the ad.</p>
+                    <div className="text-toggle-row">
+                      <button type="button" className="btn ghost sm" disabled={active.showBrand === false} onClick={() => patch({ showBrand: false })}>Hide</button>
+                      <button type="button" className="btn ghost sm" disabled={active.showBrand !== false} onClick={() => patch({ showBrand: true })}>Show</button>
+                    </div>
+                    <div className="text-edit-pop-row">
+                      <span className="text-edit-pop-label">Size</span>
+                      <div className="text-edit-pop-tools">
+                        <button
+                          type="button"
+                          className="text-style-btn"
+                          title="Smaller"
+                          disabled={clampTextScale(active.brandScale ?? 1) <= 0.7}
+                          onClick={() => patch({ brandScale: clampTextScale((active.brandScale ?? 1) - 0.05) })}
+                        >
+                          −
+                        </button>
+                        <span className="text-style-size" aria-live="polite">{Math.round(clampTextScale(active.brandScale ?? 1) * 100)}%</span>
+                        <button
+                          type="button"
+                          className="text-style-btn"
+                          title="Larger"
+                          disabled={clampTextScale(active.brandScale ?? 1) >= 1.6}
+                          onClick={() => patch({ brandScale: clampTextScale((active.brandScale ?? 1) + 0.05) })}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                     <label>Colors</label>
                     <div className="color-fields">
                       <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
@@ -1024,6 +1056,7 @@ function SideInspector({
   onStyle,
   onPickLogo,
   onCancelLogo,
+  onLogoScale,
   onDone,
   onToggle,
   onLineColor,
@@ -1042,6 +1075,7 @@ function SideInspector({
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
   onPickLogo: (id: string) => void;
   onCancelLogo: () => void;
+  onLogoScale: (scale: number) => void;
   onDone: () => void;
   onToggle: (kind: TextKind, show: boolean) => void;
   onLineColor: (kind: TextKind, hex: string) => void;
@@ -1110,6 +1144,30 @@ function SideInspector({
             </div>
           </>
         )}
+        <div className="text-edit-pop-row">
+          <span className="text-edit-pop-label">Size</span>
+          <div className="text-edit-pop-tools">
+            <button
+              type="button"
+              className="text-style-btn"
+              title="Smaller"
+              disabled={clampTextScale(version.logoScale ?? 1) <= 0.7}
+              onClick={() => onLogoScale(clampTextScale((version.logoScale ?? 1) - 0.05))}
+            >
+              −
+            </button>
+            <span className="text-style-size" aria-live="polite">{Math.round(clampTextScale(version.logoScale ?? 1) * 100)}%</span>
+            <button
+              type="button"
+              className="text-style-btn"
+              title="Larger"
+              disabled={clampTextScale(version.logoScale ?? 1) >= 1.6}
+              onClick={() => onLogoScale(clampTextScale((version.logoScale ?? 1) + 0.05))}
+            >
+              +
+            </button>
+          </div>
+        </div>
         <div className="logo-edit-actions">
           <button type="button" className="btn ghost sm" disabled={!activeLogoId} onClick={onCancelLogo}>
             Cancel logo

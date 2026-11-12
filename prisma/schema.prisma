@@ -128,6 +128,8 @@ model AdVersion {
   logoY        Float?
   // Which brand logo to overlay on this version. Null = Brief "On ad" pick. showLogo false hides it.
   logoAssetId  String?
+  // Relative logo size vs the layout slot. 1 = default.
+  logoScale    Float    @default(1)
   // Brief font file for on-ad type. Null = default Arial (or first Brief "On ad" font in the editor).
   fontAssetId  String?
   // Photo crop: 1 = cover, higher = tighter crop around the focus point.
@@ -143,6 +145,9 @@ model AdVersion {
   showHeadline Boolean  @default(true)
   showSub      Boolean  @default(true)
   showCta      Boolean  @default(true)
+  // Top-left client name drawn on the ad. showBrand false hides it.
+  showBrand    Boolean  @default(true)
+  brandScale   Float    @default(1)
   // Per-block type style for on-image headline / subline / CTA (not brand font files).
   headlineBold   Boolean @default(true)
   headlineItalic Boolean @default(false)

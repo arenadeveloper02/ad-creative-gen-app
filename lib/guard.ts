@@ -183,6 +183,7 @@ export interface VersionPatch {
   logoX?: number | null;
   logoY?: number | null;
   logoAssetId?: string | null;
+  logoScale?: number;
   fontAssetId?: string | null;
   imageZoom?: number;
   imageFocusX?: number | null;
@@ -192,6 +193,8 @@ export interface VersionPatch {
   showHeadline?: boolean;
   showSub?: boolean;
   showCta?: boolean;
+  showBrand?: boolean;
+  brandScale?: number;
   headlineBold?: boolean;
   headlineItalic?: boolean;
   headlineScale?: number;
@@ -272,6 +275,8 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (ly !== undefined) patch.logoY = ly;
   if (body.logoAssetId === null) patch.logoAssetId = null;
   else if (typeof body.logoAssetId === 'string' && isId(body.logoAssetId)) patch.logoAssetId = body.logoAssetId;
+  const ls = cleanScale(body.logoScale);
+  if (ls !== undefined) patch.logoScale = ls;
   if (body.fontAssetId === null) patch.fontAssetId = null;
   else if (typeof body.fontAssetId === 'string' && isId(body.fontAssetId)) patch.fontAssetId = body.fontAssetId;
   if (typeof body.imageZoom === 'number' && Number.isFinite(body.imageZoom)) {
@@ -286,6 +291,9 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (typeof body.showHeadline === 'boolean') patch.showHeadline = body.showHeadline;
   if (typeof body.showSub === 'boolean') patch.showSub = body.showSub;
   if (typeof body.showCta === 'boolean') patch.showCta = body.showCta;
+  if (typeof body.showBrand === 'boolean') patch.showBrand = body.showBrand;
+  const bs = cleanScale(body.brandScale);
+  if (bs !== undefined) patch.brandScale = bs;
   if (typeof body.headlineBold === 'boolean') patch.headlineBold = body.headlineBold;
   if (typeof body.headlineItalic === 'boolean') patch.headlineItalic = body.headlineItalic;
   if (typeof body.subBold === 'boolean') patch.subBold = body.subBold;
