@@ -240,6 +240,24 @@ export default function PhotoTools({
       </details>
 
       <details className="gen-meta-card">
+        <summary>Clean text</summary>
+        <div className="photo-pane">
+          <p className="hint">Wipes letters and logos painted into the photo. Headline, subline, CTA, and the logo chip stay as they are.</p>
+          <button
+            type="button"
+            className="btn sm"
+            disabled={busy || !hasPhoto}
+            onClick={() => onEdit({
+              directed: true,
+              prompt: 'Remove every word, letter, caption, logo, watermark, and brand mark painted into this photograph. Fill those areas so they match the surrounding scene, light, and texture. Keep the people, product, pose, colours, framing, and background identical. Do not add any new text or logos.',
+            })}
+          >
+            Remove text from photo
+          </button>
+        </div>
+      </details>
+
+      <details className="gen-meta-card">
         <summary>Edit</summary>
         <div className="photo-pane">
           <span className="text-edit-pop-label">Mark the area to change</span>
