@@ -26,6 +26,11 @@ export function sharedCtaInk(bg: string, c1: string, c3: string): string {
   return c1;
 }
 
+/** Default brand-name colour: white over a photo on the light template, else the shared ink. */
+export function sharedBrandInk(bg: string, c1: string, c3: string, hasImage: boolean): string {
+  return bg === 'light' && hasImage ? '#FFFFFF' : sharedInk(bg, c1, c3);
+}
+
 function applyTrack(ctx: CanvasRenderingContext2D, trackEm: number, sizePx: number): void {
   const spacing = `${Math.max(0, trackEm) * sizePx}px`;
   try {
@@ -40,6 +45,13 @@ export interface DrawAdOptions {
   logo?: HTMLImageElement | null;
   /** Loaded Brief font family name for on-ad type. */
   fontFamily?: string | null;
+  /** Loaded family per line. A line left empty here uses fontFamily. */
+  lineFonts?: {
+    headline?: string | null;
+    sub?: string | null;
+    cta?: string | null;
+    brand?: string | null;
+  };
 }
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
@@ -223,6 +235,10 @@ export function drawAd(
   const { c1, c2, c3 } = version;
   const logo = logoReady(options?.logo) ? options.logo : null;
   const fontFamily = options?.fontFamily?.trim() || null;
+  const headFamily = options?.lineFonts?.headline?.trim() || fontFamily;
+  const subFamily = options?.lineFonts?.sub?.trim() || fontFamily;
+  const ctaFamily = options?.lineFonts?.cta?.trim() || fontFamily;
+  const brandFamily = options?.lineFonts?.brand?.trim() || fontFamily;
   const imageZoom = typeof version.imageZoom === 'number' && Number.isFinite(version.imageZoom) ? version.imageZoom : 1;
   const focusX = version.imageFocusX != null ? version.imageFocusX : 0.5;
   const focusY = version.imageFocusY != null ? version.imageFocusY : 0.5;
@@ -306,7 +322,7 @@ export function drawAd(
 
   // Colour roles per template.
   const ink = sharedInk(bg, c1, c3);
-  const ctaFill = sharedCtaFill(bg, c1, c3);
+  const ctaFill = version.ctaFillColor || sharedCtaFill(bg, c1, c3);
   const ctaInk = version.ctaColor || sharedCtaInk(bg, c1, c3);
   const headlineInk = version.headlineColor || ink;
   const subInk = version.subColor || ink;
@@ -335,19 +351,19 @@ export function drawAd(
     ? Math.min(maxW, Math.max(width * 0.4, logoBox.x - pad - Math.round(width * 0.03)))
     : maxW;
 
-  ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, fontFamily);
+  ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, headFamily);
   applyTrack(ctx, headStyle.track, hSize);
   const hLines = showHeadline ? wrap(ctx, version.headline.trim(), textMaxW).slice(0, 4) : [];
   const hW = Math.min(textMaxW, widest(ctx, hLines));
   const hH = hLines.length * hLead;
 
-  ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, fontFamily);
+  ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, subFamily);
   applyTrack(ctx, subStyle.track, sSize);
   const sLines = showSub ? wrap(ctx, version.sub.trim(), textMaxW).slice(0, 3) : [];
   const sW = Math.min(textMaxW, widest(ctx, sLines));
   const sH = sLines.length * sLead;
 
-  ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize, fontFamily);
+  ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize, ctaFamily);
   applyTrack(ctx, ctaStyle.track, cSize);
   const ctaText = version.cta.trim();
   const ctaW = showCta ? Math.min(textMaxW, ctx.measureText(ctaText).width + width * 0.09 * ctaStyle.scale) : 0;
@@ -393,16 +409,29 @@ export function drawAd(
   if (subSpot) boxes.push({ kind: 'sub', x: subSpot.x, y: subSpot.y, w: sW, h: sH });
   if (ctaSpot) boxes.push({ kind: 'cta', x: ctaSpot.x, y: ctaSpot.y, w: ctaW, h: ctaH });
 
-  // Brand label in the top-left is a fixed obstacle when shown; logo slot is too when present.
-  const showBrand = version.showBrand !== false;
+  // Brand label is a fixed obstacle when shown; logo slot is too when present.
+  // It sits top-left with the project brand name until the user types their own words or drags it.
   const brandScale = typeof version.brandScale === 'number' && Number.isFinite(version.brandScale)
     ? Math.min(1.6, Math.max(0.7, version.brandScale))
     : 1;
   const labelSize = Math.round(width * 0.032 * brandScale);
-  const labelFont = fontFamily ? typeFace(true, false, labelSize, fontFamily) : `600 ${labelSize}px Arial`;
+  const labelFont = brandFamily ? typeFace(true, false, labelSize, brandFamily) : `600 ${labelSize}px Arial`;
   ctx.font = labelFont;
-  const labelText = (brand || 'Your brand').toUpperCase().slice(0, 40);
-  const labelBox: ZoneRect = { x: pad, y: pad - labelSize * 0.2, w: ctx.measureText(labelText).width, h: labelSize * 1.4 };
+  const labelText = (typeof version.brandText === 'string'
+    ? version.brandText.trim()
+    : (brand || 'Your brand').toUpperCase()
+  ).slice(0, 40);
+  const showBrand = version.showBrand !== false && labelText !== '';
+  const labelW = ctx.measureText(labelText).width;
+  const labelH = labelSize * 1.4;
+  // Distance from the top of the box down to the text baseline.
+  const labelRise = Math.round(width * 0.03 * brandScale) + labelSize * 0.2;
+  const labelBox: ZoneRect = {
+    x: version.brandX != null ? Math.max(0, Math.min(width - labelW, version.brandX * width)) : pad,
+    y: version.brandY != null ? Math.max(0, Math.min(height - labelH, version.brandY * height)) : pad - labelSize * 0.2,
+    w: labelW,
+    h: labelH,
+  };
   const fixed: ZoneRect[] = [];
   if (showBrand) fixed.push(labelBox);
   if (logoBox) fixed.push(logoBox);
@@ -452,11 +481,11 @@ export function drawAd(
 
   // Brand label.
   if (showBrand) {
-    ctx.fillStyle = bg === 'light' && hasImage ? '#FFFFFF' : ink;
+    ctx.fillStyle = version.brandColor || sharedBrandInk(bg, c1, c3, hasImage);
     ctx.font = labelFont;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(labelText, pad, pad + Math.round(width * 0.03 * brandScale));
+    ctx.fillText(labelText, labelBox.x, labelBox.y + labelRise);
   }
 
   // Accent bar above the first block uses c2.
@@ -471,7 +500,7 @@ export function drawAd(
   }
 
   if (headSpot) {
-    ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, fontFamily);
+    ctx.font = typeFace(headStyle.bold, headStyle.italic, hSize, headFamily);
     applyTrack(ctx, headStyle.track, hSize);
     ctx.fillStyle = headlineInk;
     ctx.textAlign = 'left';
@@ -486,7 +515,7 @@ export function drawAd(
   }
 
   if (subSpot) {
-    ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, fontFamily);
+    ctx.font = typeFace(subStyle.bold, subStyle.italic, sSize, subFamily);
     applyTrack(ctx, subStyle.track, sSize);
     ctx.fillStyle = subInk;
     ctx.globalAlpha = 0.92;
@@ -502,7 +531,7 @@ export function drawAd(
   }
 
   if (ctaSpot) {
-    ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize, fontFamily);
+    ctx.font = typeFace(ctaStyle.bold, ctaStyle.italic, cSize, ctaFamily);
     applyTrack(ctx, ctaStyle.track, cSize);
     ctx.fillStyle = ctaFill;
     ctx.beginPath();
@@ -515,7 +544,8 @@ export function drawAd(
     ctx.textBaseline = 'alphabetic';
   }
 
-  // Logo handle last so the UI can drag the same mark the canvas painted.
+  // Brand name and logo handles go last so they stay out of the text stack maths above.
+  if (showBrand) boxes.push({ kind: 'brand', x: labelBox.x, y: labelBox.y, w: labelBox.w, h: labelBox.h });
   if (logoBox) boxes.push({ kind: 'logo', x: logoBox.x, y: logoBox.y, w: logoBox.w, h: logoBox.h });
   return boxes;
 }

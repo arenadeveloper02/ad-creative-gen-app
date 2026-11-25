@@ -56,6 +56,7 @@ export interface VersionDTO {
   headlineColor: string | null;
   subColor: string | null;
   ctaColor: string | null;
+  ctaFillColor: string | null;
   size: string;
   imageUrl: string | null;
   imagePrompt: string | null;
@@ -71,6 +72,10 @@ export interface VersionDTO {
   logoAssetId: string | null;
   logoScale: number;
   fontAssetId: string | null;
+  headlineFontId: string | null;
+  subFontId: string | null;
+  ctaFontId: string | null;
+  brandFontId: string | null;
   imageZoom: number;
   imageFocusX: number | null;
   imageFocusY: number | null;
@@ -82,6 +87,10 @@ export interface VersionDTO {
   showCta: boolean;
   showBrand: boolean;
   brandScale: number;
+  brandText: string | null;
+  brandColor: string | null;
+  brandX: number | null;
+  brandY: number | null;
   headlineBold: boolean;
   headlineItalic: boolean;
   headlineScale: number;

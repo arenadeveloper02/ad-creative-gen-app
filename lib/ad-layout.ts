@@ -1,6 +1,6 @@
 import type { VersionDTO } from '@/lib/types';
 
-export type TextKind = 'headline' | 'sub' | 'cta' | 'logo';
+export type TextKind = 'headline' | 'sub' | 'cta' | 'brand' | 'logo';
 
 /** A painted block in canvas pixels. Returned by drawAd so handles match the real art. */
 export interface TextBox {
@@ -47,6 +47,7 @@ export function positionPatch(kind: TextKind, x: number, y: number, width: numbe
   if (kind === 'headline') return { headlineX: nx, headlineY: ny };
   if (kind === 'sub') return { subX: nx, subY: ny };
   if (kind === 'cta') return { ctaX: nx, ctaY: ny };
+  if (kind === 'brand') return { brandX: nx, brandY: ny };
   return { logoX: nx, logoY: ny };
 }
 
@@ -77,6 +78,10 @@ export function readTextStyle(version: VersionDTO, kind: TextKind): TextStyle {
       track: clampTextTrack(version.ctaTrack ?? 0),
       lead: clampTextLead(version.ctaLead ?? 1),
     };
+  }
+  // The brand name only has a size; it is always drawn bold on one line.
+  if (kind === 'brand') {
+    return { bold: true, italic: false, scale: clampTextScale(version.brandScale ?? 1), track: 0, lead: 1 };
   }
   return { bold: false, italic: false, scale: 1, track: 0, lead: 1 };
 }
@@ -109,6 +114,9 @@ export function stylePatch(kind: TextKind, style: Partial<TextStyle>): Partial<V
       ...(typeof style.lead === 'number' ? { ctaLead: clampTextLead(style.lead) } : {}),
     };
   }
+  if (kind === 'brand') {
+    return typeof style.scale === 'number' ? { brandScale: clampTextScale(style.scale) } : {};
+  }
   return {};
 }
 
@@ -116,6 +124,7 @@ export function readTextValue(version: VersionDTO, kind: TextKind): string {
   if (kind === 'headline') return version.headline;
   if (kind === 'sub') return version.sub;
   if (kind === 'cta') return version.cta;
+  if (kind === 'brand') return version.brandText ?? '';
   return '';
 }
 
@@ -127,6 +136,7 @@ export function textValuePatch(kind: TextKind, value: string): Partial<VersionDT
     return patch;
   }
   if (kind === 'cta') return { cta: value };
+  if (kind === 'brand') return { brandText: value.slice(0, 40) };
   return {};
 }
 
@@ -134,6 +144,7 @@ export function textKindLabel(kind: TextKind): string {
   if (kind === 'headline') return 'Headline';
   if (kind === 'sub') return 'Subline';
   if (kind === 'cta') return 'CTA';
+  if (kind === 'brand') return 'Brand name';
   return 'Logo';
 }
 

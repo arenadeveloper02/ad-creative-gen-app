@@ -170,9 +170,10 @@ export interface VersionPatch {
   c1?: string;
   c2?: string;
   c3?: string;
-  headlineColor?: string;
-  subColor?: string;
-  ctaColor?: string;
+  headlineColor?: string | null;
+  subColor?: string | null;
+  ctaColor?: string | null;
+  ctaFillColor?: string | null;
   size?: string;
   headlineX?: number | null;
   headlineY?: number | null;
@@ -185,6 +186,10 @@ export interface VersionPatch {
   logoAssetId?: string | null;
   logoScale?: number;
   fontAssetId?: string | null;
+  headlineFontId?: string | null;
+  subFontId?: string | null;
+  ctaFontId?: string | null;
+  brandFontId?: string | null;
   imageZoom?: number;
   imageFocusX?: number | null;
   imageFocusY?: number | null;
@@ -195,6 +200,10 @@ export interface VersionPatch {
   showCta?: boolean;
   showBrand?: boolean;
   brandScale?: number;
+  brandText?: string | null;
+  brandColor?: string | null;
+  brandX?: number | null;
+  brandY?: number | null;
   headlineBold?: boolean;
   headlineItalic?: boolean;
   headlineScale?: number;
@@ -216,6 +225,23 @@ function cleanCoord(value: unknown): number | null | undefined {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * Optional per-element colour. Null keeps the shared colour, a valid hex sets it, anything else is ignored.
+ * The editor sends the whole version on every save, so null must stay null rather than become a colour.
+ */
+function cleanOptionalHex(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  const hex = value.trim();
+  return HEX_RE.test(hex) ? hex.toUpperCase() : undefined;
+}
+
+/** Optional Brief asset id. Null clears the pick. */
+function cleanOptionalId(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return typeof value === 'string' && isId(value) ? value : undefined;
 }
 
 /** Relative type size for on-ad text. 1 = layout default. */
@@ -251,9 +277,16 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if ('c1' in body) patch.c1 = cleanHex(body.c1, '#1B365D');
   if ('c2' in body) patch.c2 = cleanHex(body.c2, '#2E6DA4');
   if ('c3' in body) patch.c3 = cleanHex(body.c3, '#FFFFFF');
-  if ('headlineColor' in body) patch.headlineColor = cleanHex(body.headlineColor, '#FFFFFF');
-  if ('subColor' in body) patch.subColor = cleanHex(body.subColor, '#FFFFFF');
-  if ('ctaColor' in body) patch.ctaColor = cleanHex(body.ctaColor, '#FFFFFF');
+  const headlineColor = cleanOptionalHex(body.headlineColor);
+  const subColor = cleanOptionalHex(body.subColor);
+  const ctaColor = cleanOptionalHex(body.ctaColor);
+  const ctaFillColor = cleanOptionalHex(body.ctaFillColor);
+  const brandColor = cleanOptionalHex(body.brandColor);
+  if (headlineColor !== undefined) patch.headlineColor = headlineColor;
+  if (subColor !== undefined) patch.subColor = subColor;
+  if (ctaColor !== undefined) patch.ctaColor = ctaColor;
+  if (ctaFillColor !== undefined) patch.ctaFillColor = ctaFillColor;
+  if (brandColor !== undefined) patch.brandColor = brandColor;
   if ('size' in body && typeof body.size === 'string' && (SIZES as readonly string[]).includes(body.size)) {
     patch.size = body.size;
   }
@@ -279,6 +312,14 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (ls !== undefined) patch.logoScale = ls;
   if (body.fontAssetId === null) patch.fontAssetId = null;
   else if (typeof body.fontAssetId === 'string' && isId(body.fontAssetId)) patch.fontAssetId = body.fontAssetId;
+  const headlineFontId = cleanOptionalId(body.headlineFontId);
+  const subFontId = cleanOptionalId(body.subFontId);
+  const ctaFontId = cleanOptionalId(body.ctaFontId);
+  const brandFontId = cleanOptionalId(body.brandFontId);
+  if (headlineFontId !== undefined) patch.headlineFontId = headlineFontId;
+  if (subFontId !== undefined) patch.subFontId = subFontId;
+  if (ctaFontId !== undefined) patch.ctaFontId = ctaFontId;
+  if (brandFontId !== undefined) patch.brandFontId = brandFontId;
   if (typeof body.imageZoom === 'number' && Number.isFinite(body.imageZoom)) {
     patch.imageZoom = Math.min(2, Math.max(1, Math.round(body.imageZoom * 100) / 100));
   }
@@ -294,6 +335,12 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (typeof body.showBrand === 'boolean') patch.showBrand = body.showBrand;
   const bs = cleanScale(body.brandScale);
   if (bs !== undefined) patch.brandScale = bs;
+  if (body.brandText === null) patch.brandText = null;
+  else if (typeof body.brandText === 'string') patch.brandText = cleanText(body.brandText, 40);
+  const bx = cleanCoord(body.brandX);
+  const by = cleanCoord(body.brandY);
+  if (bx !== undefined) patch.brandX = bx;
+  if (by !== undefined) patch.brandY = by;
   if (typeof body.headlineBold === 'boolean') patch.headlineBold = body.headlineBold;
   if (typeof body.headlineItalic === 'boolean') patch.headlineItalic = body.headlineItalic;
   if (typeof body.subBold === 'boolean') patch.subBold = body.subBold;

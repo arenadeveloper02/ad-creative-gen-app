@@ -15,7 +15,7 @@ import {
   type TextKind,
   type TextStyle,
 } from '@/lib/ad-layout';
-import { drawAd, sharedCtaInk, sharedInk } from '@/lib/draw-ad';
+import { drawAd, sharedBrandInk, sharedCtaFill, sharedCtaInk, sharedInk } from '@/lib/draw-ad';
 import { MAX_VERSIONS } from '@/lib/limits';
 import { BACKGROUNDS, SIZES, type Background } from '@/lib/platforms';
 import type { AssetDTO, ProjectDTO, VersionDTO } from '@/lib/types';
@@ -99,6 +99,30 @@ function resolveFontId(project: ProjectDTO, version: VersionDTO): string | null 
   return defaultFontId(project);
 }
 
+/** Lines that can carry their own font. */
+type FontLine = 'headline' | 'sub' | 'cta' | 'brand';
+
+function ownFontId(version: VersionDTO, line: FontLine): string | null {
+  if (line === 'headline') return version.headlineFontId;
+  if (line === 'sub') return version.subFontId;
+  if (line === 'cta') return version.ctaFontId;
+  return version.brandFontId;
+}
+
+function fontPatch(line: FontLine, id: string): Partial<VersionDTO> {
+  if (line === 'headline') return { headlineFontId: id };
+  if (line === 'sub') return { subFontId: id };
+  if (line === 'cta') return { ctaFontId: id };
+  return { brandFontId: id };
+}
+
+/** Font for one line: its own pick, else the font the whole ad used before. */
+function resolveLineFontId(project: ProjectDTO, version: VersionDTO, line: FontLine): string | null {
+  const own = ownFontId(version, line);
+  if (own && brandFonts(project).some((item) => item.id === own)) return own;
+  return resolveFontId(project, version);
+}
+
 /** Brief "On ad" pick, or the first brand logo if nothing was ticked. */
 function defaultLogoId(project: ProjectDTO): string | null {
   const logos = brandLogos(project);
@@ -149,8 +173,18 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
   const logos = brandLogos(project);
   const fonts = brandFonts(project);
   const activeLogoId = active ? resolveLogoId(project, active) : null;
-  const activeFontId = active ? resolveFontId(project, active) : null;
-  const activeFontFamily = activeFontId && fontReadyIds[activeFontId] === true ? fontFamilyName(activeFontId) : null;
+
+  /** Loaded font families for one version, one per line. A font still loading falls back to the ad font. */
+  function fontPropsFor(version: VersionDTO) {
+    const family = (id: string | null) => (id && fontReadyIds[id] === true ? fontFamilyName(id) : null);
+    return {
+      fontFamily: family(resolveFontId(project, version)),
+      headlineFont: family(resolveLineFontId(project, version, 'headline')),
+      subFont: family(resolveLineFontId(project, version, 'sub')),
+      ctaFont: family(resolveLineFontId(project, version, 'cta')),
+      brandFont: family(resolveLineFontId(project, version, 'brand')),
+    };
+  }
 
   useEffect(() => {
     if (!project.versions.some((item) => item.id === activeId)) {
@@ -514,10 +548,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                           brand={project.brandName}
                           image={isHttpsUrl(version.imageUrl) && loadedUrls[version.imageUrl] ? imageCache.current[version.imageUrl] : null}
                           logo={logoImageFor(version)}
-                          fontFamily={(() => {
-                            const id = resolveFontId(project, version);
-                            return id && fontReadyIds[id] === true ? fontFamilyName(id) : null;
-                          })()}
+                          {...fontPropsFor(version)}
                           active={version.id === active.id}
                           editingKind={null}
                           onCanvas={(node) => {
@@ -581,7 +612,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                     brand={project.brandName}
                     image={isHttpsUrl(active.imageUrl) && loadedUrls[active.imageUrl] ? imageCache.current[active.imageUrl] : null}
                     logo={logoImageFor(active)}
-                    fontFamily={activeFontFamily}
+                    {...fontPropsFor(active)}
                     active
                     editingKind={textEdit?.versionId === active.id ? asTextKind(textEdit.kind) : null}
                     onCanvas={(node) => { canvasRefs.current[active.id] = node; }}
@@ -640,8 +671,15 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                 logos={logos.map((item) => ({ id: item.id, name: item.name, url: assetUrl(item.id) }))}
                 fonts={fonts.map((item) => ({ id: item.id, name: item.name, ready: fontReadyIds[item.id] === true }))}
                 activeLogoId={activeLogoId}
-                activeFontId={activeFontId}
-                onPickFont={(id) => patch({ fontAssetId: id })}
+                fontIds={{
+                  headline: resolveLineFontId(project, active, 'headline'),
+                  sub: resolveLineFontId(project, active, 'sub'),
+                  cta: resolveLineFontId(project, active, 'cta'),
+                  brand: resolveLineFontId(project, active, 'brand'),
+                }}
+                brandDefault={(project.brandName || 'Your brand').toUpperCase().slice(0, 40)}
+                onPickFont={(line, id) => patch(fontPatch(line, id))}
+                onCtaFill={(hex) => patch({ ctaFillColor: hex })}
                 onSelectLayer={(kind) => {
                   if (kind === 'background' || kind === 'layout') {
                     setTextEdit({ versionId: active.id, kind });
@@ -657,6 +695,10 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   } else if (kind === 'cta') {
                     next.showCta = true;
                     if (!active.cta.trim()) next.cta = project.cta.trim() || 'Learn more';
+                  } else if (kind === 'brand') {
+                    next.showBrand = true;
+                    // Cleared words would leave nothing to show, so go back to the brand name.
+                    if (active.brandText !== null && !active.brandText.trim()) next.brandText = null;
                   } else {
                     next.showLogo = true;
                   }
@@ -675,12 +717,14 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   if (kind === 'headline') patch({ showHeadline: show });
                   if (kind === 'sub') patch({ showSub: show });
                   if (kind === 'cta') patch({ showCta: show });
+                  if (kind === 'brand') patch({ showBrand: show });
                   if (kind === 'logo') patch({ showLogo: show });
                 }}
                 onLineColor={(kind, hex) => {
                   if (kind === 'headline') patch({ headlineColor: hex });
                   if (kind === 'sub') patch({ subColor: hex });
                   if (kind === 'cta') patch({ ctaColor: hex });
+                  if (kind === 'brand') patch({ brandColor: hex });
                 }}
                 background={(
                   <div className="gen-inspector" role="region" aria-label="Background">
@@ -759,36 +803,6 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                       <option value="center">Centered</option>
                       <option value="bottom">Bottom band</option>
                     </select>
-                    <span className="text-edit-pop-label">Brand name</span>
-                    <p className="hint">The client name in the top-left of the ad.</p>
-                    <div className="text-toggle-row">
-                      <button type="button" className="btn ghost sm" disabled={active.showBrand === false} onClick={() => patch({ showBrand: false })}>Hide</button>
-                      <button type="button" className="btn ghost sm" disabled={active.showBrand !== false} onClick={() => patch({ showBrand: true })}>Show</button>
-                    </div>
-                    <div className="text-edit-pop-row">
-                      <span className="text-edit-pop-label">Size</span>
-                      <div className="text-edit-pop-tools">
-                        <button
-                          type="button"
-                          className="text-style-btn"
-                          title="Smaller"
-                          disabled={clampTextScale(active.brandScale ?? 1) <= 0.7}
-                          onClick={() => patch({ brandScale: clampTextScale((active.brandScale ?? 1) - 0.05) })}
-                        >
-                          −
-                        </button>
-                        <span className="text-style-size" aria-live="polite">{Math.round(clampTextScale(active.brandScale ?? 1) * 100)}%</span>
-                        <button
-                          type="button"
-                          className="text-style-btn"
-                          title="Larger"
-                          disabled={clampTextScale(active.brandScale ?? 1) >= 1.6}
-                          onClick={() => patch({ brandScale: clampTextScale((active.brandScale ?? 1) + 0.05) })}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
                     <label>Colors</label>
                     <div className="color-fields">
                       <HexColorField id="c1" label="C1" value={active.c1} onChange={(hex) => patch({ c1: hex })} />
@@ -884,6 +898,10 @@ function AdStage({
   image,
   logo,
   fontFamily = null,
+  headlineFont = null,
+  subFont = null,
+  ctaFont = null,
+  brandFont = null,
   active,
   editingKind,
   compact = false,
@@ -896,6 +914,10 @@ function AdStage({
   image: HTMLImageElement | null | undefined;
   logo: HTMLImageElement | null;
   fontFamily?: string | null;
+  headlineFont?: string | null;
+  subFont?: string | null;
+  ctaFont?: string | null;
+  brandFont?: string | null;
   active: boolean;
   editingKind: TextKind | null;
   compact?: boolean;
@@ -917,7 +939,11 @@ function AdStage({
     const painted = dragLive
       ? { ...version, ...positionPatch(dragLive.kind, dragLive.x, dragLive.y, cw || 1, ch || 1) }
       : version;
-    setBoxes(drawAd(canvas, painted, brand, image, { logo, fontFamily }));
+    setBoxes(drawAd(canvas, painted, brand, image, {
+      logo,
+      fontFamily,
+      lineFonts: { headline: headlineFont, sub: subFont, cta: ctaFont, brand: brandFont },
+    }));
     const host = frameRef.current;
     if (!host) return;
     const sync = () => {
@@ -928,7 +954,7 @@ function AdStage({
     const ro = new ResizeObserver(sync);
     ro.observe(host);
     return () => ro.disconnect();
-  }, [version, brand, image, logo, fontFamily, dragLive]);
+  }, [version, brand, image, logo, fontFamily, headlineFont, subFont, ctaFont, brandFont, dragLive]);
 
   const scaleX = frame.sw / frame.cw;
   const scaleY = frame.sh / frame.ch;
@@ -1024,6 +1050,7 @@ function shown(version: VersionDTO, kind: TextKind): boolean {
   if (kind === 'headline') return version.showHeadline !== false;
   if (kind === 'sub') return version.showSub !== false;
   if (kind === 'cta') return version.showCta !== false;
+  if (kind === 'brand') return version.showBrand !== false;
   return version.showLogo !== false;
 }
 
@@ -1033,13 +1060,14 @@ const INSPECTOR_PANELS: { id: InspectorPanel; label: string }[] = [
   { id: 'headline', label: 'Headline' },
   { id: 'sub', label: 'Subline' },
   { id: 'cta', label: 'CTA' },
+  { id: 'brand', label: 'Brand name' },
   { id: 'logo', label: 'Logo' },
   { id: 'background', label: 'Background' },
   { id: 'layout', label: 'Layout' },
 ];
 
 function asTextKind(kind: InspectorPanel | null | undefined): TextKind | null {
-  if (kind === 'headline' || kind === 'sub' || kind === 'cta' || kind === 'logo') return kind;
+  if (kind === 'headline' || kind === 'sub' || kind === 'cta' || kind === 'brand' || kind === 'logo') return kind;
   return null;
 }
 
@@ -1049,8 +1077,10 @@ function SideInspector({
   logos,
   fonts,
   activeLogoId,
-  activeFontId,
+  fontIds,
+  brandDefault,
   onPickFont,
+  onCtaFill,
   onSelectLayer,
   onText,
   onStyle,
@@ -1068,8 +1098,12 @@ function SideInspector({
   logos: { id: string; name: string; url: string }[];
   fonts: { id: string; name: string; ready: boolean }[];
   activeLogoId: string | null;
-  activeFontId: string | null;
-  onPickFont: (id: string) => void;
+  /** Font in use on each line, so every dropdown shows and changes only its own line. */
+  fontIds: Record<FontLine, string | null>;
+  /** Brand name shown until the user types their own words. */
+  brandDefault: string;
+  onPickFont: (line: FontLine, id: string) => void;
+  onCtaFill: (hex: string) => void;
   onSelectLayer: (kind: InspectorPanel) => void;
   onText: (kind: TextKind, value: string) => void;
   onStyle: (kind: TextKind, style: Partial<TextStyle>) => void;
@@ -1085,7 +1119,7 @@ function SideInspector({
   const layers = (
     <div className="gen-layers">
       <p className="text-edit-pop-title">On the ad</p>
-      <p className="hint">Open a line, the logo, the background, or the layout.</p>
+      <p className="hint">Open a line, the brand name, the logo, the background, or the layout.</p>
       <div className="gen-layer-chips" role="toolbar" aria-label="Ad layers">
         {INSPECTOR_PANELS.map((panel) => {
           const textKind = asTextKind(panel.id);
@@ -1186,15 +1220,19 @@ function SideInspector({
     const trackLabel = Math.round(style.track * 100);
     const leadLabel = Math.round(style.lead * 100);
     const visible = shown(version, selected);
+    const isBrand = selected === 'brand';
+    const hasPhoto = typeof version.imageUrl === 'string' && version.imageUrl !== '';
     body = (
       <div className="gen-inspector" role="region" aria-label={`Edit ${textKindLabel(selected)}`}>
         <p className="text-edit-pop-title">{textKindLabel(selected)}</p>
+        {isBrand && <p className="hint">The client name on the ad. Drag it on the preview to move it.</p>}
         <textarea
           className="text-edit-pop-input"
-          rows={selected === 'cta' ? 2 : 3}
-          value={readTextValue(version, selected)}
+          rows={selected === 'cta' || isBrand ? 2 : 3}
+          maxLength={isBrand ? 40 : undefined}
+          value={isBrand ? (version.brandText ?? brandDefault) : readTextValue(version, selected)}
           onChange={(e) => onText(selected, e.target.value)}
-          placeholder={selected === 'sub' ? 'Optional subline' : undefined}
+          placeholder={selected === 'sub' ? 'Optional subline' : isBrand ? 'Brand name' : undefined}
         />
         <div className="text-toggle-row">
           <button type="button" className="btn ghost sm" disabled={!visible} onClick={() => onToggle(selected, false)}>Hide</button>
@@ -1205,9 +1243,9 @@ function SideInspector({
             <label htmlFor={`font-${selected}`}>Font</label>
             <select
               id={`font-${selected}`}
-              value={activeFontId ?? ''}
+              value={fontIds[selected] ?? ''}
               onChange={(e) => {
-                if (e.target.value) onPickFont(e.target.value);
+                if (e.target.value) onPickFont(selected, e.target.value);
               }}
             >
               {fonts.map((item) => (
@@ -1218,18 +1256,29 @@ function SideInspector({
             </select>
           </>
         )}
+        {selected === 'cta' && (
+          <HexColorField
+            id="color-cta-fill"
+            label="Button color"
+            value={version.ctaFillColor || sharedCtaFill(version.bg, version.c1, version.c3)}
+            onChange={onCtaFill}
+          />
+        )}
         <HexColorField
           id={`color-${selected}`}
-          label="Color"
+          label={selected === 'cta' ? 'Text color' : 'Color'}
           value={
             selected === 'headline'
               ? (version.headlineColor || sharedInk(version.bg, version.c1, version.c3))
               : selected === 'sub'
                 ? (version.subColor || sharedInk(version.bg, version.c1, version.c3))
-                : (version.ctaColor || sharedCtaInk(version.bg, version.c1, version.c3))
+                : isBrand
+                  ? (version.brandColor || sharedBrandInk(version.bg, version.c1, version.c3, hasPhoto))
+                  : (version.ctaColor || sharedCtaInk(version.bg, version.c1, version.c3))
           }
           onChange={(hex) => onLineColor(selected, hex)}
         />
+        {!isBrand && (
         <div className="text-edit-pop-section">
           <span className="text-edit-pop-section-label">Weight &amp; style</span>
           <div className="text-edit-pop-tools" role="toolbar" aria-label="Type style">
@@ -1253,6 +1302,7 @@ function SideInspector({
             </button>
           </div>
         </div>
+        )}
         <div className="text-edit-pop-row">
           <span className="text-edit-pop-label">Size</span>
           <div className="text-edit-pop-tools">
@@ -1261,6 +1311,8 @@ function SideInspector({
             <button type="button" className="text-style-btn" title="Larger" disabled={style.scale >= 1.6} onClick={() => onStyle(selected, { scale: Math.round((style.scale + 0.05) * 100) / 100 })}>+</button>
           </div>
         </div>
+        {!isBrand && (
+        <>
         <div className="text-edit-pop-row">
           <span className="text-edit-pop-label">Letter spacing</span>
           <div className="text-edit-pop-tools">
@@ -1277,6 +1329,8 @@ function SideInspector({
             <button type="button" className="text-style-btn" title="More line space" disabled={style.lead >= 1.6} onClick={() => onStyle(selected, { lead: Math.round((style.lead + 0.05) * 100) / 100 })}>+</button>
           </div>
         </div>
+        </>
+        )}
         <div className="text-edit-pop-footer">
           <button type="button" className="btn sm text-edit-pop-save" onClick={onDone}>Done</button>
         </div>
