@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import HexColorField from '@/components/HexColorField';
 import PhotoTools, { type PhotoEdit } from '@/components/PhotoTools';
 import {
+  clampLogoScale,
   clampTextScale,
   positionPatch,
   readTextStyle,
@@ -711,7 +712,7 @@ export default function GenerateStep({ project, generating, busy, thoughts, erro
                   patch({ logoAssetId: id, showLogo: true });
                 }}
                 onCancelLogo={() => patch({ showLogo: false })}
-                onLogoScale={(scale) => patch({ logoScale: clampTextScale(scale) })}
+                onLogoScale={(scale) => patch({ logoScale: clampLogoScale(scale) })}
                 onDone={() => setTextEdit(null)}
                 onToggle={(kind, show) => {
                   if (kind === 'headline') patch({ showHeadline: show });
@@ -1185,18 +1186,18 @@ function SideInspector({
               type="button"
               className="text-style-btn"
               title="Smaller"
-              disabled={clampTextScale(version.logoScale ?? 1) <= 0.7}
-              onClick={() => onLogoScale(clampTextScale((version.logoScale ?? 1) - 0.05))}
+              disabled={clampLogoScale(version.logoScale ?? 1) <= 0.7}
+              onClick={() => onLogoScale(clampLogoScale((version.logoScale ?? 1) - 0.05))}
             >
               −
             </button>
-            <span className="text-style-size" aria-live="polite">{Math.round(clampTextScale(version.logoScale ?? 1) * 100)}%</span>
+            <span className="text-style-size" aria-live="polite">{Math.round(clampLogoScale(version.logoScale ?? 1) * 100)}%</span>
             <button
               type="button"
               className="text-style-btn"
               title="Larger"
-              disabled={clampTextScale(version.logoScale ?? 1) >= 1.6}
-              onClick={() => onLogoScale(clampTextScale((version.logoScale ?? 1) + 0.05))}
+              disabled={clampLogoScale(version.logoScale ?? 1) >= 2.5}
+              onClick={() => onLogoScale(clampLogoScale((version.logoScale ?? 1) + 0.05))}
             >
               +
             </button>

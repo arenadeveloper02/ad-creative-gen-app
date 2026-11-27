@@ -13,8 +13,8 @@ export interface ZoneRect {
  * drawAd uses these as hard obstacles; the image prompt uses the matching prose so the
  * photograph keeps that corner quiet while the logo is composited in post.
  */
-const LOGO_SIZE = 0.13;
-const LOGO_INSET = 0.06;
+const LOGO_SIZE = 0.16;
+const LOGO_INSET = 0.05;
 
 export function logoSlot(layout: Layout, width: number, height: number): ZoneRect {
   const short = Math.min(width, height);

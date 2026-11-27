@@ -207,10 +207,10 @@ function logoReady(logo: HTMLImageElement | null | undefined): logo is HTMLImage
  * The brand logo (when provided) is composited in a fixed layout slot so copy can never sit on it.
  *
  * Background templates, each driven by the three colour chips:
- *   photo    – the picture with a neutral shade. c1 = CTA button, c2 = accent bar, c3 = text.
+ *   photo    – the picture with a neutral shade. c1 = CTA button, c2 = secondary wash, c3 = text.
  *   gradient – the picture tinted c1 → c2. c3 = text and CTA button.
- *   solid    – a solid c1 panel behind the text. c2 = accent bar, c3 = text and CTA button.
- *   light    – a white panel behind the text. c1 = text and CTA button, c2 = accent bar.
+ *   solid    – a solid c1 panel behind the text. c2 = secondary wash, c3 = text and CTA button.
+ *   light    – a white panel behind the text. c1 = text and CTA button, c2 = secondary wash.
  *
  * Returns the boxes of the painted headline, subline, and CTA in canvas pixels so the editor can place drag handles exactly.
  */
@@ -301,7 +301,7 @@ export function drawAd(
   if (logo) {
     const fitted = fitInside(slot, logo.naturalWidth, logo.naturalHeight);
     const logoScale = typeof version.logoScale === 'number' && Number.isFinite(version.logoScale)
-      ? Math.min(1.6, Math.max(0.7, version.logoScale))
+      ? Math.min(2.5, Math.max(0.7, version.logoScale))
       : 1;
     const lw = fitted.w * logoScale;
     const lh = fitted.h * logoScale;
@@ -326,7 +326,6 @@ export function drawAd(
   const ctaInk = version.ctaColor || sharedCtaInk(bg, c1, c3);
   const headlineInk = version.headlineColor || ink;
   const subInk = version.subColor || ink;
-  const accent = c2;
 
   // Measure every visible block first so the stack is aligned from real text sizes.
   const showHeadline = version.showHeadline !== false && version.headline.trim() !== '';
@@ -343,8 +342,6 @@ export function drawAd(
   const sLead = sSize * 1.3 * subStyle.lead;
   const gapHS = hSize * 0.3;
   const gapCta = width * 0.045;
-  const barH = Math.max(4, Math.round(width * 0.008));
-  const barGap = Math.round(width * 0.03);
 
   // When a logo occupies the right side, keep the default text column from undercutting it.
   const textMaxW = logoBox && layout === 'left'
@@ -438,11 +435,7 @@ export function drawAd(
 
   const collideGap = Math.round(width * 0.02);
   if (boxes.length > 0) {
-    const first = boxes[0];
-    const grown: TextBox = { ...first, y: first.y - barGap - barH, h: first.h + barGap + barH };
-    resolveCollisions([grown, ...boxes.slice(1)], fixed, width, height, collideGap);
-    first.x = grown.x;
-    first.y = grown.y + barGap + barH;
+    resolveCollisions(boxes, fixed, width, height, collideGap);
   }
   for (const box of boxes) {
     if (box.kind === 'headline' && headSpot) {
@@ -465,9 +458,9 @@ export function drawAd(
     const maxY = Math.max(...boxes.map((b) => b.y + b.h));
     const inset = Math.round(width * 0.045);
     const px = Math.max(0, minX - inset);
-    const py = Math.max(0, minY - inset - barH - barGap);
+    const py = Math.max(0, minY - inset);
     const pw = Math.min(width - px, maxX - minX + inset * 2);
-    const ph = Math.min(height - py, maxY - minY + inset * 2 + barH + barGap);
+    const ph = Math.min(height - py, maxY - minY + inset * 2);
     ctx.fillStyle = bg === 'solid' ? rgba(c1, 0.94) : 'rgba(255,255,255,0.94)';
     ctx.beginPath();
     ctx.roundRect(px, py, pw, ph, Math.round(width * 0.02));
@@ -486,17 +479,6 @@ export function drawAd(
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(labelText, labelBox.x, labelBox.y + labelRise);
-  }
-
-  // Accent bar above the first block uses c2.
-  const first = boxes[0];
-  if (first) {
-    const barW = Math.round(width * 0.09);
-    const barX = centered && !(first.kind === 'headline' ? headSpot?.moved : first.kind === 'sub' ? subSpot?.moved : ctaSpot?.moved)
-      ? (width - barW) / 2
-      : first.x;
-    ctx.fillStyle = accent;
-    ctx.fillRect(barX, first.y - barGap - barH, barW, barH);
   }
 
   if (headSpot) {

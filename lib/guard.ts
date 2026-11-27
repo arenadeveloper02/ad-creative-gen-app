@@ -250,6 +250,12 @@ function cleanScale(value: unknown): number | undefined {
   return Math.min(1.6, Math.max(0.7, Math.round(value * 20) / 20));
 }
 
+/** Logo scale can go higher than text. 1 = default slot size. */
+function cleanLogoScale(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(2.5, Math.max(0.7, Math.round(value * 20) / 20));
+}
+
 /** Letter spacing as a fraction of the font size. */
 function cleanTrack(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
@@ -308,7 +314,7 @@ export function parseVersionPatch(body: Record<string, unknown>): VersionPatch {
   if (ly !== undefined) patch.logoY = ly;
   if (body.logoAssetId === null) patch.logoAssetId = null;
   else if (typeof body.logoAssetId === 'string' && isId(body.logoAssetId)) patch.logoAssetId = body.logoAssetId;
-  const ls = cleanScale(body.logoScale);
+  const ls = cleanLogoScale(body.logoScale);
   if (ls !== undefined) patch.logoScale = ls;
   if (body.fontAssetId === null) patch.fontAssetId = null;
   else if (typeof body.fontAssetId === 'string' && isId(body.fontAssetId)) patch.fontAssetId = body.fontAssetId;

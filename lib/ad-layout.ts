@@ -31,6 +31,12 @@ export function clampTextScale(value: number): number {
   return Math.min(1.6, Math.max(0.7, Math.round(value * 20) / 20));
 }
 
+/** Logo can grow larger than on-ad text. 1 = default slot size. */
+export function clampLogoScale(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(2.5, Math.max(0.7, Math.round(value * 20) / 20));
+}
+
 export function clampTextTrack(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(0.25, Math.max(0, Math.round(value * 100) / 100));
