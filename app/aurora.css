@@ -668,6 +668,9 @@ input[type="range"] { width: 100%; accent-color: var(--aurora-c1); }
 }
 .agent-back svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .agent-back:hover { border-color: var(--aurora-c1); color: var(--aurora-c1); background: rgba(var(--aurora-glow), 0.06); }
+/* Inside Arena the host page already shows the breadcrumb, so only an in-app back arrow stays. */
+html[data-embedded] .agent-crumb-trail,
+html[data-embedded] .agent-crumb-exit { display: none; }
 .agent-details h1 { text-align: center; font-size: clamp(32px, 4vw, 44px); font-weight: 700; letter-spacing: -0.03em; color: var(--aurora-text); margin: 6px 0 28px; }
 .agent-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
 .agent-main { display: flex; flex-direction: column; gap: 22px; }

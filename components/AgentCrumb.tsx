@@ -7,7 +7,14 @@ interface AgentCrumbProps {
   backHref?: string;
 }
 
-/** Same breadcrumb line as the video agent, named for this ad agent. */
+/**
+ * Same breadcrumb line as the video agent, named for this ad agent.
+ *
+ * Inside Arena the host page already shows this trail, so CSS hides it there
+ * (see `html[data-embedded]` in aurora.css). A back arrow with `backHref` moves
+ * within this app and stays; one without it leaves the agent, which Arena's own
+ * back button already does, so that whole row hides.
+ */
 export default function AgentCrumb({ backHref }: AgentCrumbProps) {
   const router = useRouter();
   const arrow = (
@@ -16,7 +23,7 @@ export default function AgentCrumb({ backHref }: AgentCrumbProps) {
     </svg>
   );
   return (
-    <nav className="agent-crumb" aria-label="Breadcrumb">
+    <nav className={backHref ? 'agent-crumb' : 'agent-crumb agent-crumb-exit'} aria-label="Breadcrumb">
       {backHref ? (
         <Link href={backHref} className="agent-back" aria-label="Back">
           {arrow}
@@ -26,7 +33,7 @@ export default function AgentCrumb({ backHref }: AgentCrumbProps) {
           {arrow}
         </button>
       )}
-      <span>
+      <span className="agent-crumb-trail">
         Agents <span aria-hidden="true">/</span> Ads <span aria-hidden="true">/</span> <strong>Ad Creative Generator</strong>
       </span>
     </nav>

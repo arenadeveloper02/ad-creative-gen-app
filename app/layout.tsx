@@ -18,11 +18,20 @@ export const metadata: Metadata = {
   description: 'Brief and brand guidelines, then platform and targeting, then a generated ad you can refine.',
 };
 
+/**
+ * Marks the page as embedded when it runs inside an iframe (Arena). Runs before
+ * first paint so the breadcrumb Arena already shows never flashes here.
+ */
+const EMBEDDED_FLAG_SCRIPT =
+  "if (window.self !== window.top) document.documentElement.setAttribute('data-embedded', '');";
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const emailId = await getArenaEmailId();
   return (
-    <html lang="en" className={jakarta.variable}>
+    // The script below adds an attribute to <html> before hydration.
+    <html lang="en" className={jakarta.variable} suppressHydrationWarning>
       <body className={jakarta.className}>
+        <script dangerouslySetInnerHTML={{ __html: EMBEDDED_FLAG_SCRIPT }} />
         <div className="aurora-shell-backdrop" aria-hidden="true">
           <span className="beam b1" />
           <span className="beam b2" />
